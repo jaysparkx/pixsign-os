@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@prisma/client": "^5.16.0",
-    "@stripe/stripe-js": "^8.8.0",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "framer-motion": "^11.3.19",
@@ -26,7 +25,6 @@
     "react-hot-toast": "^2.4.1",
     "resend": "^6.9.2",
     "sharp": "^0.33.4",
-    "stripe": "^20.4.0",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
