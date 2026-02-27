@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getDownloadUrl } from "@/lib/storage";
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
     try {
@@ -16,7 +17,8 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
             },
         });
         if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        return NextResponse.json(doc);
+        const pdfUrl = await getDownloadUrl(doc.signedPath || doc.originalPath);
+        return NextResponse.json({ ...doc, pdfUrl });
     } catch (e) {
         console.error("Share API error:", e);
         return NextResponse.json({ error: "Failed to load document" }, { status: 500 });

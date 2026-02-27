@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = `${process.env.EMAIL_FROM_NAME || "eSign"} <${process.env.EMAIL_FROM || "onboarding@resend.dev"}>`;
+const FROM = `${process.env.EMAIL_FROM_NAME || "PixSign"} <${process.env.EMAIL_FROM || "noreply@pixsign.ai"}>`;
 const APP = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 function wrap(body: string) {
@@ -21,9 +21,9 @@ function wrap(body: string) {
     .ftr{padding:20px 32px;border-top:1px solid #2a2a52}
     .ftr p{font-size:11px;color:#383866;margin:0}
   </style></head><body><div class="box">
-    <div class="hdr"><span class="logo">e<span>Sign</span></span></div>
+    <div class="hdr"><span class="logo">Pix<span>Sign</span></span></div>
     <div class="body">${body}</div>
-    <div class="ftr"><p>Automated message from eSign. Do not reply.</p></div>
+    <div class="ftr"><p>Automated message from PixSign. Do not reply.</p></div>
   </div></body></html>`;
 }
 

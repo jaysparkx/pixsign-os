@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { saveFile, hashBuffer } from "@/lib/storage";
+import { uploadFile, hashBuffer } from "@/lib/storage";
 import { validatePdf } from "@/lib/pdf";
 import { log } from "@/lib/events";
+import { requireUser } from "@/lib/get-user";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  const { user, error } = await requireUser();
+  if (error) return error;
+
   const form = await req.formData();
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
@@ -23,12 +27,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid PDF" }, { status: 400 });
   }
 
-  const originalPath = saveFile(buffer, "originals");
+  const originalPath = await uploadFile(buffer, file.name, "originals");
   const originalHash = hashBuffer(buffer);
   const title = (form.get("title") as string) || file.name.replace(".pdf", "");
 
   const doc = await prisma.document.create({
-    data: { title, originalPath, originalHash },
+    data: { title, originalPath, originalHash, userId: user.id },
   });
 
   await log(doc.id, "DOCUMENT_CREATED", undefined, undefined, { pages });

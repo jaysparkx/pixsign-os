@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { log, getIp } from "@/lib/events";
+import { getDownloadUrl } from "@/lib/storage";
 
 export async function GET(req: NextRequest, { params }: { params: { docId: string; token: string } }) {
   const recipient = await prisma.recipient.findUnique({
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: { docId: strin
   const doc = recipient.document;
 
   if (doc.status === "VOIDED") return NextResponse.json({ error: "This document has been voided" }, { status: 410 });
-  if (doc.status === "COMPLETED") return NextResponse.json({ completed: true, signedPath: doc.signedPath });
+  if (doc.status === "COMPLETED") return NextResponse.json({ completed: true, pdfUrl: doc.signedPath ? await getDownloadUrl(doc.signedPath) : null });
   if (doc.expiresAt && new Date() > doc.expiresAt) {
     await prisma.document.update({ where: { id: doc.id }, data: { status: "EXPIRED" } });
     return NextResponse.json({ error: "This document has expired" }, { status: 410 });
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest, { params }: { params: { docId: strin
 
   return NextResponse.json({
     recipient: { id: recipient.id, name: recipient.name, email: recipient.email },
-    document: { id: doc.id, title: doc.title, message: doc.message, pdfUrl: doc.originalPath, expiresAt: doc.expiresAt },
+    document: { id: doc.id, title: doc.title, message: doc.message, pdfUrl: await getDownloadUrl(doc.originalPath), expiresAt: doc.expiresAt },
     fields: myFields,
   });
 }

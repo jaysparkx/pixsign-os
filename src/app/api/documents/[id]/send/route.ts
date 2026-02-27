@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { sendSigningRequest } from "@/lib/email";
 import { log } from "@/lib/events";
+import { requireUser } from "@/lib/get-user";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const { user, error } = await requireUser();
+  if (error) return error;
+
   const doc = await prisma.document.findUnique({
-    where: { id: params.id },
+    where: { id: params.id, userId: user.id },
     include: { recipients: true, fields: true },
   });
   if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });

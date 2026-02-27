@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { requireUser } from "@/lib/get-user";
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+  const { user, error } = await requireUser();
+  if (error) return error;
+
   const [doc, events, viewEvents] = await Promise.all([
     prisma.document.findUnique({
-      where: { id: params.id },
+      where: { id: params.id, userId: user.id },
       include: { recipients: true, fields: true },
     }),
     prisma.event.findMany({

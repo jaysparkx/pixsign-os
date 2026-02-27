@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, User, Bell, Shield, Palette, Globe, Save, Lock, Sun, Moon, Monitor } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTheme } from "@/lib/theme";
+import { useSession } from "@/lib/auth-client";
 
 const TABS = [
   { key: "profile", label: "Profile", icon: User, comingSoon: false },
@@ -17,35 +18,22 @@ const TABS = [
 export default function SettingsPage() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const { data: session } = useSession();
   const [tab, setTab] = useState("profile");
-  const [displayName, setDisplayName] = useState("PixSign User");
-  const [email, setEmail] = useState("user@pixsign.com");
+  const [displayName, setDisplayName] = useState(session?.user?.name || "");
   const [timezone, setTimezone] = useState("UTC");
 
-  // Load saved profile from localStorage
-  useEffect(() => {
-    try {
-      const savedName = localStorage.getItem("pixsign_user_name");
-      if (savedName) setDisplayName(savedName);
-      const savedEmail = localStorage.getItem("pixsign_user_email");
-      if (savedEmail) setEmail(savedEmail);
-    } catch {}
-  }, []);
+  const email = session?.user?.email || "";
 
-  function handleSave() {
-    try {
-      localStorage.setItem("pixsign_user_name", displayName);
-      localStorage.setItem("pixsign_user_email", email);
-    } catch {}
+  async function handleSave() {
+    // TODO: Update user name via Better Auth API when profile update is needed
     toast.success("Settings saved");
-    // Dispatch event so other components update in real-time
-    window.dispatchEvent(new Event("pixsign_profile_updated"));
   }
 
   function handleTabClick(key: string) {
     const tabDef = TABS.find(t => t.key === key);
     if (tabDef?.comingSoon) {
-      toast("Coming soon!", { icon: "🚧" });
+      toast("Coming soon!", { icon: "\u{1F6A7}" });
       return;
     }
     setTab(key);
@@ -90,7 +78,7 @@ export default function SettingsPage() {
                 <div className="bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-2xl p-6">
                   <h2 className="text-base font-semibold text-slate-800 dark:text-white mb-5">Profile Information</h2>
                   <div className="flex items-center gap-5 mb-6">
-                    <img src={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=22c55e&textColor=ffffff&fontSize=40`} alt="" className="w-16 h-16 rounded-full" />
+                    <img src={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(displayName || "PS")}&backgroundColor=22c55e&textColor=ffffff&fontSize=40`} alt="" className="w-16 h-16 rounded-full" />
                     <div>
                       <button className="px-4 py-2 bg-mint-500 hover:bg-mint-600 text-white text-sm font-medium rounded-xl transition-colors">Change Avatar</button>
                       <p className="text-xs text-slate-400 dark:text-neutral-500 mt-1">JPG, PNG or SVG. Max 2MB.</p>
@@ -104,8 +92,8 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-slate-600 dark:text-neutral-300 mb-1.5 block">Email</label>
-                      <input value={email} onChange={e => setEmail(e.target.value)} type="email"
-                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl text-sm text-slate-700 dark:text-neutral-200 outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 dark:focus:ring-mint-900/30 transition-all" />
+                      <input value={email} disabled
+                        className="w-full px-3 py-2.5 bg-slate-100 dark:bg-neutral-800/50 border border-slate-200 dark:border-neutral-700 rounded-xl text-sm text-slate-500 dark:text-neutral-400 outline-none cursor-not-allowed" />
                     </div>
                     <div>
                       <label className="text-sm font-medium text-slate-600 dark:text-neutral-300 mb-1.5 block">Timezone</label>

@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { readFile } from "@/lib/storage";
+import { downloadFile } from "@/lib/storage";
 import { log, getIp } from "@/lib/events";
+import { requireUser } from "@/lib/get-user";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const doc = await prisma.document.findUnique({ where: { id: params.id } });
+  const { user, error } = await requireUser();
+  if (error) return error;
+
+  const doc = await prisma.document.findUnique({ where: { id: params.id, userId: user.id } });
   if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const filePath = doc.signedPath || doc.originalPath;
-  const buffer = readFile(filePath);
+  const buffer = await downloadFile(filePath);
   const filename = `${doc.title.replace(/[^a-z0-9]/gi, "_")}_${doc.status === "COMPLETED" ? "signed" : "original"}.pdf`;
 
   await log(params.id, "DOWNLOAD", undefined, getIp(req));

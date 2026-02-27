@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTheme } from "@/lib/theme";
+import { useSession, signOut } from "@/lib/auth-client";
 
 /* ─── Status config ─── */
 const STATUS: Record<string, { label: string; dot: string; bg: string; text: string }> = {
@@ -203,25 +204,11 @@ function MiniBarChart({ data, maxVal }: { data: { label: string; value: number; 
 /* ═══════════ User dropdown ═══════════ */
 function UserDropdown() {
   const [open, setOpen] = useState(false);
-  const [userName, setUserName] = useState("PixSign User");
-  const [userEmail, setUserEmail] = useState("user@pixsign.com");
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
-
-  // Load name from localStorage + listen for changes
-  useEffect(() => {
-    function loadProfile() {
-      try {
-        const n = localStorage.getItem("pixsign_user_name");
-        if (n) setUserName(n);
-        const e = localStorage.getItem("pixsign_user_email");
-        if (e) setUserEmail(e);
-      } catch {}
-    }
-    loadProfile();
-    window.addEventListener("pixsign_profile_updated", loadProfile);
-    return () => window.removeEventListener("pixsign_profile_updated", loadProfile);
-  }, []);
+  const { data: session } = useSession();
+  const userName = session?.user?.name || "PixSign User";
+  const userEmail = session?.user?.email || "";
 
   useEffect(() => {
     function onClick(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
@@ -249,7 +236,7 @@ function UserDropdown() {
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-neutral-700 transition-colors text-left">
               <Settings size={15} /> Settings
             </button>
-            <button onClick={() => { setOpen(false); toast.success("Logged out"); }}
+            <button onClick={async () => { setOpen(false); await signOut(); router.push("/login"); }}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors text-left border-t border-slate-100 dark:border-neutral-700">
               <LogOut size={15} /> Log out
             </button>

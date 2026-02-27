@@ -3,12 +3,84 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
+
+// ── Auth Models (Better Auth) ────────────────────────────
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  emailVerified    Boolean   @default(false)
+  name             String?
+  image            String?
+  plan             String    @default("FREE")
+  stripeCustomerId String?   @unique
+  stripeSubStatus  String?
+  docsThisMonth    Int       @default(0)
+  docsResetAt      DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  documents Document[]
+  sessions  Session[]
+  accounts  Account[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// ── App Models ───────────────────────────────────────────
 
 model Document {
   id             String      @id @default(uuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id])
   title          String
   status         String      @default("DRAFT")
   signingOrder   String      @default("PARALLEL")
@@ -17,8 +89,8 @@ model Document {
   completedAt    DateTime?
   voidedAt       DateTime?
   voidReason     String?
-  originalPath   String      // local file path: /uploads/originals/xxx.pdf
-  signedPath     String?     // local file path after signing
+  originalPath   String      // R2 key or local path
+  signedPath     String?     // R2 key after signing
   originalHash   String
   signedHash     String?
   senderName     String      @default("Document Sender")
@@ -28,6 +100,10 @@ model Document {
   fields         Field[]
   recipients     Recipient[]
   events         Event[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
 }
 
 model Field {
@@ -69,6 +145,9 @@ model Recipient {
 
   fields       Field[]
   events       Event[]
+
+  @@index([documentId])
+  @@index([email])
 }
 
 model Event {

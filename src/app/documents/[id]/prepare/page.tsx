@@ -75,7 +75,7 @@ export default function PreparePage() {
         ]);
         setDoc(d); setFields(f); setRecs(r);
         if (r.length) setSelRec(r[0].id);
-        await renderPdf(d.originalPath);
+        await renderPdf(d.pdfUrl);
       } catch { toast.error("Failed to load document"); }
       setLoading(false);
     })();

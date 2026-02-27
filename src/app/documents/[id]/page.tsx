@@ -127,8 +127,7 @@ export default function DocDetail() {
 
   useEffect(() => {
     if (doc) {
-      const pdfPath = doc.signedPath || doc.originalPath;
-      if (pdfPath) renderPdf(pdfPath);
+      if (doc.pdfUrl) renderPdf(doc.pdfUrl);
     }
   }, [doc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 

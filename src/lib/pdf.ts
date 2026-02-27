@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import prisma from "./prisma";
-import { readFile, saveFile, hashBuffer } from "./storage";
+import { downloadFile, uploadFile, hashBuffer } from "./storage";
 
 export async function validatePdf(buffer: Buffer): Promise<{ pages: number }> {
   const doc = await PDFDocument.load(buffer);
@@ -19,7 +19,7 @@ export async function finalizeDocument(documentId: string): Promise<void> {
   if (!doc) throw new Error("Document not found");
 
   // 1. Load original PDF
-  const original = readFile(doc.originalPath);
+  const original = await downloadFile(doc.originalPath);
   const pdfDoc = await PDFDocument.load(original);
   const pages = pdfDoc.getPages();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -111,7 +111,7 @@ export async function finalizeDocument(documentId: string): Promise<void> {
   const finalBytes = await pdfDoc.save();
   const finalBuf = Buffer.from(finalBytes);
   const signedHash = hashBuffer(finalBuf);
-  const signedPath = saveFile(finalBuf, "signed", "pdf");
+  const signedPath = await uploadFile(finalBuf, "signed.pdf", "signed");
 
   await prisma.document.update({
     where: { id: documentId },

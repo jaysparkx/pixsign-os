@@ -18,8 +18,7 @@ export default function ShareView() {
       .then(r => { if (!r.ok) throw new Error("Not found"); return r.json(); })
       .then(d => {
         setDoc(d);
-        const pdfPath = d.signedPath || d.originalPath;
-        if (pdfPath) { setPdfUrl(pdfPath); }
+        if (d.pdfUrl) { setPdfUrl(d.pdfUrl); }
         else { setError("No PDF available for this document"); setLoading(false); }
       })
       .catch(() => { setError("Document not found or unavailable"); setLoading(false); });
