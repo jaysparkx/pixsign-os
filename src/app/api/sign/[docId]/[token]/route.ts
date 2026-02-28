@@ -22,9 +22,15 @@ export async function GET(req: NextRequest, { params }: { params: { docId: strin
     const filePath = doc.signedPath || doc.originalPath;
     try {
       const buffer = await downloadFile(filePath);
-      return new NextResponse(new Uint8Array(buffer), {
-        headers: { "Content-Type": "application/pdf", "Cache-Control": "private, max-age=300" },
-      });
+      const headers: Record<string, string> = {
+        "Content-Type": "application/pdf",
+        "Cache-Control": "private, max-age=300",
+      };
+      if (req.nextUrl.searchParams.get("dl") === "1") {
+        const filename = `${doc.title.replace(/[^a-z0-9]/gi, "_")}_signed.pdf`;
+        headers["Content-Disposition"] = `attachment; filename="${filename}"`;
+      }
+      return new NextResponse(new Uint8Array(buffer), { headers });
     } catch (e) {
       console.error("Sign PDF download error:", e);
       return NextResponse.json({ error: "Failed to retrieve file" }, { status: 500 });

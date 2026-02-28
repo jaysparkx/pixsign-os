@@ -35,13 +35,19 @@ export async function finalizeDocument(documentId: string): Promise<void> {
     const pdfY = ph - field.y - field.height;
 
     if ((field.type === "SIGNATURE" || field.type === "INITIALS") && field.value) {
-      // value holds base64 PNG data URL
       try {
-        const base64 = field.value.replace(/^data:image\/png;base64,/, "");
+        // Strip any data URL prefix (supports PNG, JPEG, etc.)
+        const base64 = field.value.replace(/^data:image\/[^;]+;base64,/, "");
         const imgBuf = Buffer.from(base64, "base64");
-        const img = await pdfDoc.embedPng(imgBuf);
+        // Try PNG first, fall back to JPEG
+        let img;
+        try {
+          img = await pdfDoc.embedPng(imgBuf);
+        } catch {
+          img = await pdfDoc.embedJpg(imgBuf);
+        }
         page.drawImage(img, { x: field.x, y: pdfY, width: field.width, height: field.height });
-      } catch (e) { console.error("Embed sig error", e); }
+      } catch (e) { console.error("Embed sig error for field", field.id, e); }
     } else if (field.type === "CHECKBOX") {
       page.drawRectangle({ x: field.x, y: pdfY, width: field.width, height: field.height, borderColor: rgb(0.3,0.3,0.5), borderWidth: 1 });
       if (field.value === "true") {

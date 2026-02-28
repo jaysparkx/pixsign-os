@@ -50,22 +50,26 @@ export async function POST(req: NextRequest, { params }: { params: { docId: stri
   const allSigned = signers.every((r) => r.id === recipient.id ? true : r.status === "SIGNED");
 
   if (allSigned) {
-    // Finalize PDF
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+    // Finalize PDF — only send completion emails if finalization succeeds
     try {
       await finalizeDocument(params.docId);
+
+      // Send completion emails with per-recipient token-based download URLs
+      for (const r of doc.recipients) {
+        try {
+          const dlUrl = `${APP}/api/sign/${params.docId}/${r.token}?pdf=1&dl=1`;
+          await sendCompletionEmail({ to: r.email, toName: r.name, docTitle: doc.title, downloadUrl: dlUrl });
+        } catch (e) { console.error("Completion email failed:", e); }
+      }
     } catch (e) {
       console.error("Finalization error:", e);
     }
 
-    // Send completion emails
-    const APP = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const downloadUrl = `${APP}/api/documents/${params.docId}/download`;
-    for (const r of doc.recipients) {
-      try {
-        await sendCompletionEmail({ to: r.email, toName: r.name, docTitle: doc.title, downloadUrl });
-      } catch (e) { console.error("Completion email failed:", e); }
-    }
-    return NextResponse.json({ ok: true, completed: true, downloadUrl });
+    // Return token-based download URL for the current signer
+    const signerDlUrl = `${APP}/api/sign/${params.docId}/${params.token}?pdf=1&dl=1`;
+    return NextResponse.json({ ok: true, completed: true, downloadUrl: signerDlUrl });
   } else if (doc.signingOrder === "SEQUENTIAL") {
     // Notify next signer
     const next = signers
