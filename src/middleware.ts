@@ -52,6 +52,11 @@ export async function middleware(req: NextRequest) {
     "frame-ancestors 'none'; default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https:; font-src 'self' https:;"
   );
 
+  // Prevent HTML page caching so deploys take effect immediately
+  if (!pathname.startsWith("/_next/static") && !pathname.startsWith("/api/")) {
+    headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  }
+
   // Public routes — pass through with security headers
   if (isPublic(pathname)) {
     const res = NextResponse.next();

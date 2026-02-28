@@ -165,14 +165,10 @@ function Sidebar({ activeNav, onNav, onMobileClose, stats, collapsed, onToggle }
               <ChevronDown size={14} className={`ml-auto text-violet-400 flex-shrink-0 transition-transform duration-200 ${aiOpen ? "rotate-180" : ""}`} />
             )}
           </button>
-
           {expanded && aiOpen && (
             <div className="ml-3 pl-3 mt-1 border-l-2 border-violet-200 dark:border-violet-800 space-y-0.5">
               {AI_TOOLS.map(item => (
-                <div
-                  key={item.key}
-                  className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 dark:text-neutral-400"
-                >
+                <div key={item.key} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 dark:text-neutral-400">
                   <item.icon size={15} className="flex-shrink-0 text-violet-400 dark:text-violet-500" />
                   <span className="whitespace-nowrap overflow-hidden">{item.label}</span>
                   <span className="ml-auto text-[10px] font-medium bg-violet-100 dark:bg-violet-950/40 text-violet-500 dark:text-violet-400 px-1.5 py-0.5 rounded-full flex-shrink-0">Soon</span>
