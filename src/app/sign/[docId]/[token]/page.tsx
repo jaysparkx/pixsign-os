@@ -79,10 +79,13 @@ export default function SignPage() {
         else if (f.type === "EMAIL") init[f.id] = { value: data.recipient.email };
       }
       setValues(init);
-      // Render pdf
+      // Render pdf — fetch in main thread (includes cookies), then pass ArrayBuffer to pdfjs
       const pdfjs = await import("pdfjs-dist");
       pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
-      const pdf = await pdfjs.getDocument(data.document.pdfUrl).promise;
+      const pdfRes = await fetch(data.document.pdfUrl);
+      if (!pdfRes.ok) throw new Error(`PDF fetch failed: ${pdfRes.status}`);
+      const pdfData = await pdfRes.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: pdfData }).promise;
       setTotalPages(pdf.numPages);
       const imgs: string[] = [];
       for (let n = 1; n <= pdf.numPages; n++) {

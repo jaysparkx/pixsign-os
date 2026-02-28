@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getDownloadUrl, deleteFile } from "@/lib/storage";
+import { deleteFile } from "@/lib/storage";
 import { requireUser } from "@/lib/get-user";
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
@@ -12,7 +12,8 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
     include: { fields: { include: { recipient: true } }, recipients: true },
   });
   if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const pdfUrl = await getDownloadUrl(doc.signedPath || doc.originalPath);
+  // Proxy PDF through our own API to avoid R2 CORS issues
+  const pdfUrl = `/api/documents/${params.id}/download`;
   return NextResponse.json({ ...doc, pdfUrl });
 }
 

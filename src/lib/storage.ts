@@ -63,15 +63,9 @@ export async function downloadFile(key: string): Promise<Buffer> {
     const response = await r2.send(
       new GetObjectCommand({ Bucket: BUCKET, Key: key })
     );
-    const stream = response.Body as ReadableStream;
-    const chunks: Uint8Array[] = [];
-    const reader = stream.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-    }
-    return Buffer.concat(chunks);
+    // Use AWS SDK's built-in stream conversion (works in both Node.js and Edge)
+    const bytes = await response.Body!.transformToByteArray();
+    return Buffer.from(bytes);
   } else {
     // Dev: read from local filesystem
     const fs = await import("fs/promises");

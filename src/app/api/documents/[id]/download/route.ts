@@ -14,15 +14,24 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const filePath = doc.signedPath || doc.originalPath;
-  const buffer = await downloadFile(filePath);
+  let buffer: Buffer;
+  try {
+    buffer = await downloadFile(filePath);
+  } catch (e) {
+    console.error("Download file error:", e);
+    return NextResponse.json({ error: "Failed to retrieve file" }, { status: 500 });
+  }
   const filename = `${doc.title.replace(/[^a-z0-9]/gi, "_")}_${doc.status === "COMPLETED" ? "signed" : "original"}.pdf`;
 
-  await log(params.id, "DOWNLOAD", undefined, getIp(req));
+  await log(params.id, "DOWNLOAD", undefined, getIp(req)).catch(() => {});
+
+  const disposition = req.nextUrl.searchParams.get("dl") === "1" ? "attachment" : "inline";
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": `${disposition}; filename="${filename}"`,
+      "Cache-Control": "private, max-age=300",
     },
   });
 }

@@ -47,3 +47,6 @@ next-env.d.ts
 
 # Misc
 Thumbs.db
+
+# Local Netlify folder
+.netlify

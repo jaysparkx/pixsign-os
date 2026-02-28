@@ -29,7 +29,11 @@ export default function ShareView() {
       setLoading(true);
       const pdfjsLib = await import("pdfjs-dist");
       pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
-      const pdf = await pdfjsLib.getDocument(url).promise;
+      // Fetch in main thread (includes cookies), then pass ArrayBuffer to pdfjs
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`PDF fetch failed: ${res.status}`);
+      const data = await res.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data }).promise;
       setTotalPages(pdf.numPages);
       const imgs: string[] = [];
       for (let i = 1; i <= pdf.numPages; i++) {

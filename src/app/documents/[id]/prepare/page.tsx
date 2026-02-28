@@ -86,7 +86,11 @@ export default function PreparePage() {
     const pdfjs = await import("pdfjs-dist");
     pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
     try {
-      const pdf = await pdfjs.getDocument(path).promise;
+      // Fetch in main thread (includes auth cookies), then pass ArrayBuffer to pdfjs
+      const res = await fetch(path);
+      if (!res.ok) throw new Error(`PDF fetch failed: ${res.status}`);
+      const data = await res.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data }).promise;
       setTotalPg(pdf.numPages);
       const imgs: string[] = [];
       for (let n = 1; n <= pdf.numPages; n++) {

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { log, getIp } from "@/lib/events";
-import { getDownloadUrl } from "@/lib/storage";
+import { downloadFile } from "@/lib/storage";
+
+export const runtime = "nodejs";
 
 export async function GET(req: NextRequest, { params }: { params: { docId: string; token: string } }) {
   const recipient = await prisma.recipient.findUnique({
@@ -15,8 +17,22 @@ export async function GET(req: NextRequest, { params }: { params: { docId: strin
 
   const doc = recipient.document;
 
+  // Serve PDF binary when ?pdf=1
+  if (req.nextUrl.searchParams.get("pdf") === "1") {
+    const filePath = doc.signedPath || doc.originalPath;
+    try {
+      const buffer = await downloadFile(filePath);
+      return new NextResponse(new Uint8Array(buffer), {
+        headers: { "Content-Type": "application/pdf", "Cache-Control": "private, max-age=300" },
+      });
+    } catch (e) {
+      console.error("Sign PDF download error:", e);
+      return NextResponse.json({ error: "Failed to retrieve file" }, { status: 500 });
+    }
+  }
+
   if (doc.status === "VOIDED") return NextResponse.json({ error: "This document has been voided" }, { status: 410 });
-  if (doc.status === "COMPLETED") return NextResponse.json({ completed: true, pdfUrl: doc.signedPath ? await getDownloadUrl(doc.signedPath) : null });
+  if (doc.status === "COMPLETED") return NextResponse.json({ completed: true, pdfUrl: `/api/sign/${params.docId}/${params.token}?pdf=1` });
   if (doc.expiresAt && new Date() > doc.expiresAt) {
     await prisma.document.update({ where: { id: doc.id }, data: { status: "EXPIRED" } });
     return NextResponse.json({ error: "This document has expired" }, { status: 410 });
@@ -39,7 +55,7 @@ export async function GET(req: NextRequest, { params }: { params: { docId: strin
 
   return NextResponse.json({
     recipient: { id: recipient.id, name: recipient.name, email: recipient.email },
-    document: { id: doc.id, title: doc.title, message: doc.message, pdfUrl: await getDownloadUrl(doc.originalPath), expiresAt: doc.expiresAt },
+    document: { id: doc.id, title: doc.title, message: doc.message, pdfUrl: `/api/sign/${params.docId}/${params.token}?pdf=1`, expiresAt: doc.expiresAt },
     fields: myFields,
   });
 }
