@@ -10,7 +10,8 @@ import {
   Clock, CheckCircle2, FileEdit, Bell, Menu,
   TrendingUp, TrendingDown, File, Activity, Calendar,
   Settings, LogOut, ChevronLeft, ChevronRight, FolderPlus, FolderOpen, Lock,
-  Sun, Moon, Monitor
+  Sun, Moon, Monitor,
+  Sparkles, Bot, Plug, Wand2, Brain, ScanSearch, ChevronDown
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTheme } from "@/lib/theme";
@@ -49,6 +50,14 @@ const NAV_MAIN = [
 ];
 
 const COMING_SOON_NAV = new Set(["shared"]);
+
+const AI_TOOLS = [
+  { key: "ai-generate",  label: "Generate AI Doc",     icon: Wand2 },
+  { key: "ai-mcp",       label: "Connect MCP",         icon: Plug },
+  { key: "ai-agent",     label: "Connect AI Agent",    icon: Bot },
+  { key: "ai-review",    label: "AI Contract Review",  icon: Brain },
+  { key: "ai-analyze",   label: "Smart Analysis",      icon: ScanSearch },
+];
 
 /* ═══════════ Context menu ═══════════ */
 function DocMenu({ doc, onAction }: { doc: any; onAction: (a: string, id: string) => void }) {
@@ -97,6 +106,7 @@ function Sidebar({ activeNav, onNav, onMobileClose, stats, collapsed, onToggle }
   collapsed: boolean; onToggle: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const expanded = !collapsed || hovered;
   const { theme, setTheme } = useTheme();
   const themeOptions: { key: "light" | "dark" | "system"; icon: typeof Sun; label: string }[] = [
@@ -138,6 +148,49 @@ function Sidebar({ activeNav, onNav, onMobileClose, stats, collapsed, onToggle }
             </button>
           );
         })}
+
+        {/* AI Tools dropdown */}
+        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-neutral-800">
+          <button
+            onClick={() => setAiOpen(!aiOpen)}
+            title={!expanded ? "AI Tools" : undefined}
+            className={`w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all ${expanded ? "px-3 py-2.5" : "px-0 py-2.5 justify-center"} text-slate-500 dark:text-neutral-400 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:text-slate-700 dark:hover:text-neutral-200`}
+          >
+            <div className="relative flex-shrink-0">
+              <Sparkles size={18} className="text-violet-500" />
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full animate-pulse" />
+            </div>
+            {expanded && <span className="whitespace-nowrap overflow-hidden bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent font-semibold">AI Tools</span>}
+            {expanded && (
+              <ChevronDown size={14} className={`ml-auto text-slate-300 dark:text-neutral-600 flex-shrink-0 transition-transform duration-200 ${aiOpen ? "rotate-180" : ""}`} />
+            )}
+          </button>
+
+          <AnimatePresence>
+            {aiOpen && expanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="ml-3 pl-3 border-l border-slate-100 dark:border-neutral-800 space-y-0.5 py-1">
+                  {AI_TOOLS.map(item => (
+                    <button
+                      key={item.key}
+                      className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-slate-400 dark:text-neutral-600 cursor-default group"
+                    >
+                      <item.icon size={15} className="flex-shrink-0 text-slate-300 dark:text-neutral-700 group-hover:text-violet-400 dark:group-hover:text-violet-500 transition-colors" />
+                      <span className="whitespace-nowrap overflow-hidden">{item.label}</span>
+                      <span className="ml-auto text-[10px] font-medium bg-violet-50 dark:bg-violet-950/40 text-violet-400 dark:text-violet-500 px-1.5 py-0.5 rounded-full flex-shrink-0">Soon</span>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </nav>
 
       {/* Bottom section */}
