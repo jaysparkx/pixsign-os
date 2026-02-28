@@ -135,7 +135,7 @@ function Sidebar({ activeNav, onNav, onMobileClose, stats, collapsed, onToggle }
       </div>
 
       {/* Main nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+      <nav className="px-3 py-4 space-y-1">
         {NAV_MAIN.map(item => {
           const active = activeNav === item.key;
           const isComingSoon = COMING_SOON_NAV.has(item.key);
@@ -148,50 +148,53 @@ function Sidebar({ activeNav, onNav, onMobileClose, stats, collapsed, onToggle }
             </button>
           );
         })}
-
-        {/* AI Tools dropdown */}
-        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-neutral-800">
-          <button
-            onClick={() => setAiOpen(!aiOpen)}
-            title={!expanded ? "AI Tools" : undefined}
-            className={`w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all ${expanded ? "px-3 py-2.5" : "px-0 py-2.5 justify-center"} text-slate-500 dark:text-neutral-400 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:text-slate-700 dark:hover:text-neutral-200`}
-          >
-            <div className="relative flex-shrink-0">
-              <Sparkles size={18} className="text-violet-500" />
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full animate-pulse" />
-            </div>
-            {expanded && <span className="whitespace-nowrap overflow-hidden bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent font-semibold">AI Tools</span>}
-            {expanded && (
-              <ChevronDown size={14} className={`ml-auto text-slate-300 dark:text-neutral-600 flex-shrink-0 transition-transform duration-200 ${aiOpen ? "rotate-180" : ""}`} />
-            )}
-          </button>
-
-          <AnimatePresence>
-            {aiOpen && expanded && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden"
-              >
-                <div className="ml-3 pl-3 border-l border-slate-100 dark:border-neutral-800 space-y-0.5 py-1">
-                  {AI_TOOLS.map(item => (
-                    <button
-                      key={item.key}
-                      className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-slate-400 dark:text-neutral-600 cursor-default group"
-                    >
-                      <item.icon size={15} className="flex-shrink-0 text-slate-300 dark:text-neutral-700 group-hover:text-violet-400 dark:group-hover:text-violet-500 transition-colors" />
-                      <span className="whitespace-nowrap overflow-hidden">{item.label}</span>
-                      <span className="ml-auto text-[10px] font-medium bg-violet-50 dark:bg-violet-950/40 text-violet-400 dark:text-violet-500 px-1.5 py-0.5 rounded-full flex-shrink-0">Soon</span>
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
       </nav>
+
+      {/* AI Tools dropdown — separate section */}
+      <div className={`px-3 pt-2 pb-3 border-t border-slate-100 dark:border-neutral-800 ${expanded ? "" : ""}`}>
+        <button
+          onClick={() => setAiOpen(!aiOpen)}
+          title={!expanded ? "AI Tools" : undefined}
+          className={`w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all ${expanded ? "px-3 py-2.5" : "px-0 py-2.5 justify-center"} text-slate-500 dark:text-neutral-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 hover:text-violet-600 dark:hover:text-violet-400`}
+        >
+          <div className="relative flex-shrink-0">
+            <Sparkles size={18} className="text-violet-500" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full animate-pulse" />
+          </div>
+          {expanded && <span className="whitespace-nowrap overflow-hidden text-violet-600 dark:text-violet-400 font-semibold">AI Tools</span>}
+          {expanded && (
+            <ChevronDown size={14} className={`ml-auto text-violet-300 dark:text-violet-600 flex-shrink-0 transition-transform duration-200 ${aiOpen ? "rotate-180" : ""}`} />
+          )}
+        </button>
+
+        <AnimatePresence>
+          {aiOpen && expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="ml-3 pl-3 border-l border-violet-200 dark:border-violet-900/50 space-y-0.5 py-1">
+                {AI_TOOLS.map(item => (
+                  <button
+                    key={item.key}
+                    className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-slate-400 dark:text-neutral-500 cursor-default group"
+                  >
+                    <item.icon size={15} className="flex-shrink-0 text-slate-300 dark:text-neutral-700 group-hover:text-violet-400 dark:group-hover:text-violet-500 transition-colors" />
+                    <span className="whitespace-nowrap overflow-hidden">{item.label}</span>
+                    <span className="ml-auto text-[10px] font-medium bg-violet-50 dark:bg-violet-950/40 text-violet-400 dark:text-violet-500 px-1.5 py-0.5 rounded-full flex-shrink-0">Soon</span>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Spacer to push bottom section down */}
+      <div className="flex-1" />
 
       {/* Bottom section */}
       <div className={`pb-3 space-y-3 border-t border-slate-100 dark:border-neutral-800 pt-3 ${expanded ? "px-4" : "px-2"}`}>
