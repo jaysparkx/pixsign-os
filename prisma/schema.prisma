@@ -1,0 +1,180 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ── Auth Models (Better Auth) ────────────────────────────
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  emailVerified    Boolean   @default(false)
+  name             String?
+  image            String?
+  plan             String    @default("FREE")
+  stripeCustomerId String?   @unique
+  stripeSubStatus  String?
+  docsThisMonth    Int       @default(0)
+  docsResetAt      DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  documents Document[]
+  sessions  Session[]
+  accounts  Account[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// ── App Models ───────────────────────────────────────────
+
+model Document {
+  id             String      @id @default(uuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id])
+  title          String
+  status         String      @default("DRAFT")
+  signingOrder   String      @default("PARALLEL")
+  message        String?
+  expiresAt      DateTime?
+  completedAt    DateTime?
+  voidedAt       DateTime?
+  voidReason     String?
+  originalPath   String      // R2 key or local path
+  signedPath     String?     // R2 key after signing
+  originalHash   String
+  signedHash     String?
+  senderName     String      @default("Document Sender")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  fields         Field[]
+  recipients     Recipient[]
+  events         Event[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+}
+
+model Field {
+  id          String    @id @default(uuid())
+  documentId  String
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  recipientId String?
+  recipient   Recipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+  page        Int
+  x           Float
+  y           Float
+  width       Float
+  height      Float
+  type        String    // SIGNATURE | INITIALS | DATE | TEXT | CHECKBOX | NAME | EMAIL
+  label       String?
+  required    Boolean   @default(true)
+  value       String?
+  signedAt    DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Recipient {
+  id           String    @id @default(uuid())
+  documentId   String
+  document     Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  name         String
+  email        String
+  role         String    @default("SIGNER")  // SIGNER | CC
+  signingOrder Int       @default(1)
+  status       String    @default("PENDING") // PENDING | SENT | VIEWED | SIGNED | DECLINED
+  token        String    @unique @default(uuid())
+  emailSentAt  DateTime?
+  viewedAt     DateTime?
+  signedAt     DateTime?
+  declinedAt   DateTime?
+  declineReason String?
+  ipAddress    String?
+  createdAt    DateTime  @default(now())
+
+  fields       Field[]
+  events       Event[]
+
+  @@index([documentId])
+  @@index([email])
+}
+
+model Event {
+  id          String    @id @default(uuid())
+  documentId  String
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  recipientId String?
+  recipient   Recipient? @relation(fields: [recipientId], references: [id])
+  type        String
+  ip          String?
+  meta        String?   // JSON string
+  createdAt   DateTime  @default(now())
+}
+
+model ViewEvent {
+  id          String   @id @default(uuid())
+  documentId  String
+  visitorId   String   // cookie-based fingerprint
+  page        Int
+  durationMs  Int
+  scrollDepth Float    @default(0)  // 0.0 to 1.0
+  ip          String?
+  userAgent   String?
+  location    String?  // "City, Country" from IP geolocation
+  createdAt   DateTime @default(now())
+
+  @@index([documentId, page])
+  @@index([documentId, visitorId])
+}
