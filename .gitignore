@@ -1,1 +1,2 @@
 node_modules/\n.next/\n.env\n.env.local\nprisma/dev.db\npublic/uploads/
+*.log\n*.pid\n.DS_Store\nThumbs.db
