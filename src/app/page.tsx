@@ -86,7 +86,7 @@ function DocMenu({ doc, onAction }: { doc: any; onAction: (a: string, id: string
       </button>
       <AnimatePresence>
         {open && (
-          <motion.div initial={{ opacity: 0, scale: 0.95, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -4 }} transition={{ duration: 0.12 }} className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl shadow-lg shadow-slate-200/50 dark:shadow-black/30 overflow-hidden py-1">
+          <motion.div initial={{ opacity: 0, scale: 0.95, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -4 }} transition={{ duration: 0.12 }} className="absolute right-0 top-full mt-1 w-52 z-50 bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl shadow-lg shadow-slate-200/50 dark:shadow-black/30 overflow-hidden py-1">
             {items.map(item => (
               <button key={item.key} onClick={e => { e.preventDefault(); e.stopPropagation(); setOpen(false); onAction(item.key, doc.id); }}
                 className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors text-left ${item.danger ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 border-t border-slate-100 dark:border-neutral-700" : "text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-neutral-700"}`}>
@@ -209,16 +209,18 @@ function Sidebar({ activeNav, onNav, onMobileClose, stats, collapsed, onToggle }
 function MiniBarChart({ data, maxVal }: { data: { label: string; value: number; color: string }[]; maxVal: number }) {
   return (
     <div className="flex items-end gap-1.5 h-32">
-      {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-          <motion.div
-            initial={{ height: 0 }} animate={{ height: `${Math.max((d.value / Math.max(maxVal, 1)) * 100, 4)}%` }}
-            transition={{ delay: i * 0.05, duration: 0.4 }}
-            className={`w-full rounded-t-md ${d.color}`}
-          />
-          <span className="text-[10px] text-slate-400 dark:text-neutral-500 truncate w-full text-center">{d.label}</span>
-        </div>
-      ))}
+      {data.map((d, i) => {
+        const pct = d.value > 0 ? Math.max((d.value / Math.max(maxVal, 1)) * 100, 8) : 0;
+        return (
+          <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
+            <div className="w-full relative" style={{ height: `${pct}%`, minHeight: d.value > 0 ? "8px" : "2px" }}>
+              <div className={`absolute inset-0 rounded-t-md ${d.value > 0 ? d.color : "bg-slate-200 dark:bg-neutral-700"}`} />
+            </div>
+            <span className="text-[10px] text-slate-400 dark:text-neutral-500 truncate w-full text-center">{d.label}</span>
+            {d.value > 0 && <span className="text-[9px] font-medium text-slate-500 dark:text-neutral-400 -mt-0.5">{d.value}</span>}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -288,6 +290,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [activityPeriod, setActivityPeriod] = useState<"day" | "week" | "month">("month");
 
   /* Category state — saved to localStorage */
   const [categories, setCategories] = useState<{ id: string; label: string }[]>([]);
@@ -453,15 +456,44 @@ export default function Home() {
     return segments.filter(s => s.count > 0);
   }, [stats]);
 
-  const monthlyActivity = useMemo(() => {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const counts = new Array(12).fill(0);
-    if (analyticsData?.timeline) {
-      for (const ev of analyticsData.timeline) { const m = new Date(ev.createdAt).getMonth(); counts[m]++; }
+  const chartData = useMemo(() => {
+    const now = new Date();
+
+    if (activityPeriod === "day") {
+      // Last 14 days
+      const buckets: { label: string; value: number; color: string }[] = [];
+      for (let i = 13; i >= 0; i--) {
+        const d = new Date(now); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0);
+        const next = new Date(d); next.setDate(next.getDate() + 1);
+        const count = docs.filter(doc => { const t = new Date(doc.createdAt).getTime(); return t >= d.getTime() && t < next.getTime(); }).length;
+        buckets.push({ label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), value: count, color: "bg-mint-400" });
+      }
+      return buckets;
     }
-    for (const d of docs) { const m = new Date(d.createdAt).getMonth(); counts[m]++; }
-    return months.map((label, i) => ({ label, value: counts[i], color: "bg-mint-400" }));
-  }, [analyticsData, docs]);
+
+    if (activityPeriod === "week") {
+      // Last 8 weeks
+      const buckets: { label: string; value: number; color: string }[] = [];
+      for (let i = 7; i >= 0; i--) {
+        const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay());
+        weekStart.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 7);
+        const count = docs.filter(doc => { const t = new Date(doc.createdAt).getTime(); return t >= weekStart.getTime() && t < weekEnd.getTime(); }).length;
+        buckets.push({ label: `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, value: count, color: "bg-mint-400" });
+      }
+      return buckets;
+    }
+
+    // month — Last 12 months (rolling, not calendar-fixed)
+    const buckets: { label: string; value: number; color: string }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const m = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mEnd = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+      const count = docs.filter(doc => { const t = new Date(doc.createdAt).getTime(); return t >= m.getTime() && t < mEnd.getTime(); }).length;
+      buckets.push({ label: m.toLocaleDateString("en-US", { month: "short" }), value: count, color: "bg-mint-400" });
+    }
+    return buckets;
+  }, [docs, activityPeriod]);
 
   const isDashboard = activeNav === "dashboard";
   const isDeletedView = activeNav === "deleted";
@@ -593,10 +625,15 @@ export default function Home() {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-base font-semibold text-slate-800 dark:text-white">Document Activity</h2>
                     <div className="flex items-center bg-slate-100 dark:bg-neutral-800 rounded-lg p-0.5 text-xs font-medium">
-                      <span className="px-3 py-1 rounded-md bg-white dark:bg-neutral-700 text-mint-600 dark:text-mint-400 shadow-sm">12 Months</span>
+                      {(["day", "week", "month"] as const).map(p => (
+                        <button key={p} onClick={() => setActivityPeriod(p)}
+                          className={`px-3 py-1 rounded-md transition-all ${activityPeriod === p ? "bg-white dark:bg-neutral-700 text-mint-600 dark:text-mint-400 shadow-sm" : "text-slate-400 dark:text-neutral-500 hover:text-slate-600 dark:hover:text-neutral-300"}`}>
+                          {p === "day" ? "Daily" : p === "week" ? "Weekly" : "Monthly"}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                  <MiniBarChart data={monthlyActivity} maxVal={Math.max(...monthlyActivity.map(m => m.value), 1)} />
+                  <MiniBarChart data={chartData} maxVal={Math.max(...chartData.map(m => m.value), 1)} />
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
@@ -856,8 +893,8 @@ export default function Home() {
 
                 {/* LIST VIEW */}
                 {!loading && filteredDocs.length > 0 && viewMode === "list" && (
-                  <div className="bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-2xl overflow-hidden">
-                    <div className="grid grid-cols-[1fr_120px_120px_130px_40px] gap-4 px-5 py-3 border-b border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-800/50 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  <div className="bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-2xl">
+                    <div className="grid grid-cols-[1fr_120px_120px_130px_40px] gap-4 px-5 py-3 border-b border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-800/50 text-xs font-semibold text-slate-400 uppercase tracking-wider rounded-t-2xl overflow-hidden">
                       <span>Name</span><span className="hidden sm:block">Status</span><span className="hidden md:block">Signers</span><span className="hidden md:block">Last Modified</span><span></span>
                     </div>
                     <AnimatePresence>

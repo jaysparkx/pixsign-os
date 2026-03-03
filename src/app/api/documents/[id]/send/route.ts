@@ -20,6 +20,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const signers = doc.recipients.filter((r) => r.role === "SIGNER");
   if (!signers.length) return NextResponse.json({ error: "Add at least one signer" }, { status: 400 });
 
+  // Auto-assign unassigned fields to the first signer
+  const unassigned = doc.fields.filter((f) => !f.recipientId);
+  if (unassigned.length > 0) {
+    const defaultSigner = signers.sort((a, b) => a.signingOrder - b.signingOrder)[0];
+    await prisma.field.updateMany({
+      where: { id: { in: unassigned.map((f) => f.id) } },
+      data: { recipientId: defaultSigner.id },
+    });
+  }
+
   const body = await req.json().catch(() => ({}));
   const senderName = body.senderName || doc.senderName || "Document Sender";
 

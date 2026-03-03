@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Pen, Send, Download, XCircle, CheckCircle2, Copy, Trash2,
-  Settings, Calendar, Clock, RefreshCw, Eye, Share2, FileText, Users,
+  Settings, Calendar, Clock, RefreshCw, Eye, Share2, FileText, Users, Plus, X,
   ChevronLeft, ChevronRight, Activity, BarChart3, Edit3, Shield,
   ExternalLink, AlertTriangle, Mail, Hash, Globe, Layers, Maximize2, Minimize2
 } from "lucide-react";
@@ -13,39 +13,39 @@ import toast from "react-hot-toast";
 
 /* ─── Status config ─── */
 const STATUS_CFG: Record<string, { label: string; dot: string; bg: string; text: string }> = {
-  DRAFT:            { label: "Draft",       dot: "bg-slate-400",  bg: "bg-slate-100 dark:bg-neutral-800",   text: "text-slate-600 dark:text-neutral-300" },
-  SENT:             { label: "Sent",        dot: "bg-blue-400",   bg: "bg-blue-50 dark:bg-blue-950/40",     text: "text-blue-600 dark:text-blue-400" },
-  PARTIALLY_SIGNED: { label: "In Progress", dot: "bg-amber-400",  bg: "bg-amber-50 dark:bg-amber-950/40",    text: "text-amber-600 dark:text-amber-400" },
-  COMPLETED:        { label: "Completed",   dot: "bg-mint-500",   bg: "bg-mint-50 dark:bg-mint-950/40",     text: "text-mint-700 dark:text-mint-400" },
-  DECLINED:         { label: "Declined",    dot: "bg-red-400",    bg: "bg-red-50 dark:bg-red-950/30",      text: "text-red-600 dark:text-red-400" },
-  EXPIRED:          { label: "Expired",     dot: "bg-slate-400",  bg: "bg-slate-100 dark:bg-neutral-800",   text: "text-slate-500 dark:text-neutral-400" },
-  VOIDED:           { label: "Voided",      dot: "bg-slate-400",  bg: "bg-slate-100 dark:bg-neutral-800",   text: "text-slate-500 dark:text-neutral-400" },
+  DRAFT: { label: "Draft", dot: "bg-slate-400", bg: "bg-slate-100 dark:bg-neutral-800", text: "text-slate-600 dark:text-neutral-300" },
+  SENT: { label: "Sent", dot: "bg-blue-400", bg: "bg-blue-50 dark:bg-blue-950/40", text: "text-blue-600 dark:text-blue-400" },
+  PARTIALLY_SIGNED: { label: "In Progress", dot: "bg-amber-400", bg: "bg-amber-50 dark:bg-amber-950/40", text: "text-amber-600 dark:text-amber-400" },
+  COMPLETED: { label: "Completed", dot: "bg-mint-500", bg: "bg-mint-50 dark:bg-mint-950/40", text: "text-mint-700 dark:text-mint-400" },
+  DECLINED: { label: "Declined", dot: "bg-red-400", bg: "bg-red-50 dark:bg-red-950/30", text: "text-red-600 dark:text-red-400" },
+  EXPIRED: { label: "Expired", dot: "bg-slate-400", bg: "bg-slate-100 dark:bg-neutral-800", text: "text-slate-500 dark:text-neutral-400" },
+  VOIDED: { label: "Voided", dot: "bg-slate-400", bg: "bg-slate-100 dark:bg-neutral-800", text: "text-slate-500 dark:text-neutral-400" },
 };
 
 const RSTATUS: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-  PENDING:  { label: "Pending",  color: "text-slate-500 dark:text-neutral-400",  bg: "bg-slate-100 dark:bg-neutral-800", icon: "⏳" },
-  SENT:     { label: "Sent",     color: "text-blue-600 dark:text-blue-400",   bg: "bg-blue-50 dark:bg-blue-950/40",   icon: "📧" },
-  VIEWED:   { label: "Viewed",   color: "text-amber-600 dark:text-amber-400",  bg: "bg-amber-50 dark:bg-amber-950/40",  icon: "👁" },
-  SIGNED:   { label: "Signed",   color: "text-mint-700 dark:text-mint-400",   bg: "bg-mint-50 dark:bg-mint-950/40",   icon: "✓" },
-  DECLINED: { label: "Declined", color: "text-red-600 dark:text-red-400",    bg: "bg-red-50 dark:bg-red-950/30",    icon: "✗" },
+  PENDING: { label: "Pending", color: "text-slate-500 dark:text-neutral-400", bg: "bg-slate-100 dark:bg-neutral-800", icon: "⏳" },
+  SENT: { label: "Sent", color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/40", icon: "📧" },
+  VIEWED: { label: "Viewed", color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/40", icon: "👁" },
+  SIGNED: { label: "Signed", color: "text-mint-700 dark:text-mint-400", bg: "bg-mint-50 dark:bg-mint-950/40", icon: "✓" },
+  DECLINED: { label: "Declined", color: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/30", icon: "✗" },
 };
 
 const EV_LABELS: Record<string, { label: string; color: string; icon: typeof Activity }> = {
-  DOCUMENT_CREATED:   { label: "Document Created",    color: "text-slate-500",  icon: FileText },
-  DOCUMENT_SENT:      { label: "Sent for Signing",    color: "text-blue-500",   icon: Send },
-  DOCUMENT_VOIDED:    { label: "Document Voided",     color: "text-red-500",    icon: XCircle },
-  DOCUMENT_COMPLETED: { label: "All Signatures Done", color: "text-mint-600",   icon: CheckCircle2 },
-  EMAIL_SENT:         { label: "Email Sent",          color: "text-blue-500",   icon: Mail },
-  RECIPIENT_VIEWED:   { label: "Viewed by Signer",    color: "text-amber-500",  icon: Eye },
-  RECIPIENT_SIGNED:   { label: "Signed",              color: "text-mint-600",   icon: Pen },
-  RECIPIENT_DECLINED: { label: "Declined",            color: "text-red-500",    icon: XCircle },
-  FIELD_SIGNED:       { label: "Field Completed",     color: "text-mint-500",   icon: CheckCircle2 },
-  DOWNLOAD:           { label: "Downloaded",          color: "text-slate-500",  icon: Download },
+  DOCUMENT_CREATED: { label: "Document Created", color: "text-slate-500", icon: FileText },
+  DOCUMENT_SENT: { label: "Sent for Signing", color: "text-blue-500", icon: Send },
+  DOCUMENT_VOIDED: { label: "Document Voided", color: "text-red-500", icon: XCircle },
+  DOCUMENT_COMPLETED: { label: "All Signatures Done", color: "text-mint-600", icon: CheckCircle2 },
+  EMAIL_SENT: { label: "Email Sent", color: "text-blue-500", icon: Mail },
+  RECIPIENT_VIEWED: { label: "Viewed by Signer", color: "text-amber-500", icon: Eye },
+  RECIPIENT_SIGNED: { label: "Signed", color: "text-mint-600", icon: Pen },
+  RECIPIENT_DECLINED: { label: "Declined", color: "text-red-500", icon: XCircle },
+  FIELD_SIGNED: { label: "Field Completed", color: "text-mint-500", icon: CheckCircle2 },
+  DOWNLOAD: { label: "Downloaded", color: "text-slate-500", icon: Download },
 };
 
 const TABS = [
   { key: "overview", label: "Overview", icon: Layers },
-  { key: "preview",  label: "Preview",  icon: Eye },
+  { key: "preview", label: "Preview", icon: Eye },
   { key: "activity", label: "Activity", icon: Activity },
   { key: "analytics", label: "Analytics", icon: BarChart3 },
 ];
@@ -80,6 +80,12 @@ export default function DocDetail() {
   const [totalPages, setTotalPages] = useState(1);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+
+  /* Recipient management */
+  const [addingRecipient, setAddingRecipient] = useState(false);
+  const [newRecName, setNewRecName] = useState("");
+  const [newRecEmail, setNewRecEmail] = useState("");
+  const [newRecRole, setNewRecRole] = useState("SIGNER");
 
   /* ─── Load document ─── */
   const load = useCallback(async () => {
@@ -211,6 +217,30 @@ export default function DocDetail() {
     return { label: `${d} days left`, color: "text-mint-600 dark:text-mint-400", bg: "bg-mint-50 dark:bg-mint-950/40", urgent: false };
   }
 
+  async function addRecipient() {
+    if (!newRecName.trim() || !newRecEmail.trim()) { toast.error("Name & email required"); return; }
+    try {
+      const res = await fetch(`/api/documents/${id}/recipients`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newRecName.trim(), email: newRecEmail.trim(), role: newRecRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success("Recipient added!");
+      setNewRecName(""); setNewRecEmail(""); setNewRecRole("SIGNER"); setAddingRecipient(false);
+      load();
+    } catch (e: any) { toast.error(e.message || "Failed to add recipient"); }
+  }
+
+  async function removeRecipient(rid: string) {
+    try {
+      await fetch(`/api/documents/${id}/recipients/${rid}`, { method: "DELETE" });
+      toast.success("Recipient removed");
+      load();
+    } catch { toast.error("Failed to remove"); }
+  }
+
   function timeAgo(date: string) {
     const diff = Date.now() - new Date(date).getTime();
     if (diff < 60000) return "Just now";
@@ -306,11 +336,10 @@ export default function DocDetail() {
         <div className="max-w-7xl mx-auto px-6 flex gap-1">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all ${
-                tab === t.key
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all ${tab === t.key
                   ? "border-mint-500 text-mint-700 dark:text-mint-400"
                   : "border-transparent text-slate-500 dark:text-neutral-400 hover:text-slate-700 dark:hover:text-neutral-200 hover:border-slate-300 dark:hover:border-neutral-600"
-              }`}>
+                }`}>
               <t.icon size={15} />{t.label}
             </button>
           ))}
@@ -394,9 +423,8 @@ export default function DocDetail() {
                   <div className="p-5">
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="font-semibold text-slate-800 dark:text-white">Signing Progress</h2>
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                        signedCount === signers.length && signers.length > 0 ? "bg-mint-50 dark:bg-mint-950/40 text-mint-700 dark:text-mint-400" : "bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300"
-                      }`}>
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${signedCount === signers.length && signers.length > 0 ? "bg-mint-50 dark:bg-mint-950/40 text-mint-700 dark:text-mint-400" : "bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300"
+                        }`}>
                         {signedCount}/{signers.length} signed
                       </span>
                     </div>
@@ -420,9 +448,8 @@ export default function DocDetail() {
                             return (
                               <div key={r.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-neutral-800 border border-slate-100 dark:border-neutral-800 rounded-xl hover:border-slate-200 dark:hover:border-neutral-700 transition-all">
                                 <div className="relative">
-                                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${
-                                    r.status === "SIGNED" ? "bg-mint-500 text-white" : "bg-slate-200 dark:bg-neutral-700 text-slate-500 dark:text-neutral-400"
-                                  }`}>
+                                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${r.status === "SIGNED" ? "bg-mint-500 text-white" : "bg-slate-200 dark:bg-neutral-700 text-slate-500 dark:text-neutral-400"
+                                    }`}>
                                     {r.name?.[0]?.toUpperCase() || "?"}
                                   </div>
                                   {doc.signingOrder === "SEQUENTIAL" && (
@@ -462,7 +489,7 @@ export default function DocDetail() {
                       <div className="text-center py-6">
                         <Users size={32} className="text-slate-300 dark:text-neutral-600 mx-auto mb-2" />
                         <p className="text-sm text-slate-500 dark:text-neutral-400">No recipients added yet</p>
-                        {isDraft && <Link href={`/documents/${id}/prepare`} className="text-xs text-mint-600 dark:text-mint-400 hover:text-mint-700 dark:hover:text-mint-300 font-medium mt-1 inline-block">Add recipients →</Link>}
+                        {isDraft && <button onClick={() => setAddingRecipient(true)} className="text-xs text-mint-600 dark:text-mint-400 hover:text-mint-700 dark:hover:text-mint-300 font-medium mt-1 inline-block">Add recipients →</button>}
                       </div>
                     )}
                   </div>
@@ -473,24 +500,87 @@ export default function DocDetail() {
                   <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
                     className="bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-2xl p-5 space-y-4">
                     <h2 className="font-semibold text-slate-800 dark:text-white">Send for Signature</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {[
-                        { label: "Prepare fields", desc: "Place signature & field boxes on PDF", href: `/documents/${id}/prepare`, done: doc.fields?.length > 0, icon: Edit3 },
-                        { label: "Add recipients", desc: "Add signers and CC recipients", href: `/documents/${id}/prepare`, done: doc.recipients?.length > 0, icon: Users },
-                      ].map(step => (
-                        <Link key={step.label} href={step.href}>
-                          <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-neutral-800 hover:bg-slate-100 dark:hover:bg-neutral-700 border border-slate-100 dark:border-neutral-800 hover:border-slate-200 dark:hover:border-neutral-700 rounded-xl transition-all group cursor-pointer h-full">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${step.done ? "bg-mint-500 text-white" : "bg-slate-200 dark:bg-neutral-700 text-slate-400 dark:text-neutral-500"}`}>
-                              {step.done ? <CheckCircle2 size={16} /> : <step.icon size={16} />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-slate-700 dark:text-neutral-200">{step.label}</div>
-                              <div className="text-xs text-slate-400 dark:text-neutral-500">{step.desc}</div>
-                            </div>
+
+                    {/* Step 1: Add recipients inline */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${doc.recipients?.length > 0 ? "bg-mint-500 text-white" : "bg-slate-200 dark:bg-neutral-700 text-slate-400 dark:text-neutral-500"}`}>
+                            {doc.recipients?.length > 0 ? <CheckCircle2 size={13} /> : <Users size={13} />}
                           </div>
-                        </Link>
-                      ))}
+                          <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">Recipients</span>
+                          <span className="text-xs text-slate-400 dark:text-neutral-500">{doc.recipients?.length || 0} added</span>
+                        </div>
+                        {!addingRecipient && (
+                          <button onClick={() => setAddingRecipient(true)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-mint-50 dark:bg-mint-950/40 hover:bg-mint-100 dark:hover:bg-mint-900/50 text-mint-700 dark:text-mint-400 rounded-lg text-xs font-medium transition-colors border border-mint-200 dark:border-mint-800">
+                            <Plus size={12} /> Add
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Recipient list on overview */}
+                      {doc.recipients?.length > 0 && (
+                        <div className="space-y-1.5 mb-3">
+                          {doc.recipients.map((r: any) => (
+                            <div key={r.id} className="flex items-center gap-2.5 px-3 py-2 bg-slate-50 dark:bg-neutral-800 rounded-xl">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${r.role === "CC" ? "bg-slate-400" : "bg-mint-500"
+                                }`}>{r.name?.[0]?.toUpperCase() || "?"}</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm text-slate-700 dark:text-neutral-200 truncate">{r.name}</div>
+                                <div className="text-xs text-slate-400 dark:text-neutral-500 truncate">{r.email} · {r.role === "CC" ? "CC" : "Signer"}</div>
+                              </div>
+                              <button onClick={() => removeRecipient(r.id)}
+                                className="p-1 text-slate-300 dark:text-neutral-600 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30">
+                                <X size={13} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add recipient form */}
+                      <AnimatePresence>
+                        {addingRecipient && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden">
+                            <div className="p-3 bg-slate-50 dark:bg-neutral-800 border border-mint-200 dark:border-mint-800 rounded-xl space-y-2">
+                              <input autoFocus placeholder="Full name" value={newRecName} onChange={e => setNewRecName(e.target.value)}
+                                className="w-full px-2.5 py-2 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm text-slate-700 dark:text-neutral-200 placeholder:text-slate-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 dark:focus:ring-mint-900/30 transition-all" />
+                              <input placeholder="Email address" type="email" value={newRecEmail} onChange={e => setNewRecEmail(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter") addRecipient(); }}
+                                className="w-full px-2.5 py-2 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm text-slate-700 dark:text-neutral-200 placeholder:text-slate-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 dark:focus:ring-mint-900/30 transition-all" />
+                              <select value={newRecRole} onChange={e => setNewRecRole(e.target.value)}
+                                className="w-full px-2.5 py-2 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm text-slate-700 dark:text-neutral-200 focus:outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 dark:focus:ring-mint-900/30 transition-all">
+                                <option value="SIGNER">Signer</option>
+                                <option value="CC">CC only</option>
+                              </select>
+                              <div className="flex gap-2">
+                                <button onClick={() => { setAddingRecipient(false); setNewRecName(""); setNewRecEmail(""); }}
+                                  className="flex-1 py-1.5 bg-slate-100 dark:bg-neutral-700 hover:bg-slate-200 dark:hover:bg-neutral-600 text-slate-500 dark:text-neutral-300 rounded-lg text-xs font-medium transition-colors">Cancel</button>
+                                <button onClick={addRecipient}
+                                  className="flex-1 py-1.5 bg-mint-500 hover:bg-mint-600 text-white rounded-lg text-xs font-semibold transition-colors">Add</button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
+
+                    {/* Step 2: Prepare fields link */}
+                    <Link href={`/documents/${id}/prepare`}>
+                      <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-neutral-800 hover:bg-slate-100 dark:hover:bg-neutral-700 border border-slate-100 dark:border-neutral-800 hover:border-slate-200 dark:hover:border-neutral-700 rounded-xl transition-all cursor-pointer">
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${doc.fields?.length > 0 ? "bg-mint-500 text-white" : "bg-slate-200 dark:bg-neutral-700 text-slate-400 dark:text-neutral-500"}`}>
+                          {doc.fields?.length > 0 ? <CheckCircle2 size={13} /> : <Edit3 size={13} />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-slate-700 dark:text-neutral-200">Place fields on PDF</div>
+                          <div className="text-xs text-slate-400 dark:text-neutral-500">{doc.fields?.length || 0} fields placed</div>
+                        </div>
+                        <ChevronRight size={14} className="text-slate-300 dark:text-neutral-600" />
+                      </div>
+                    </Link>
+
                     <div>
                       <label className="text-xs font-medium text-slate-500 dark:text-neutral-400 block mb-1.5">Your name (shown to signers)</label>
                       <input value={senderName} onChange={e => setSenderName(e.target.value)}
@@ -501,7 +591,7 @@ export default function DocDetail() {
                       {sending ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Send size={16} />}
                       {sending ? "Sending..." : "Send for Signature"}
                     </button>
-                    {!signers.length && <p className="text-xs text-amber-600 dark:text-amber-400 text-center bg-amber-50 dark:bg-amber-950/40 px-3 py-2 rounded-lg">⚠ Add at least one signer in the field editor before sending</p>}
+                    {!signers.length && <p className="text-xs text-amber-600 dark:text-amber-400 text-center bg-amber-50 dark:bg-amber-950/40 px-3 py-2 rounded-lg">⚠ Add at least one signer above before sending</p>}
                   </motion.div>
                 )}
 
@@ -637,8 +727,8 @@ export default function DocDetail() {
                       <div className="flex items-center gap-3 p-4 bg-mint-50 dark:bg-mint-950/40 border border-mint-200 dark:border-mint-800 hover:border-mint-400 dark:hover:border-mint-600 rounded-2xl cursor-pointer group transition-all">
                         <Pen size={18} className="text-mint-500 flex-shrink-0" />
                         <div>
-                          <div className="text-sm font-semibold text-mint-700 dark:text-mint-400">Open Editor</div>
-                          <div className="text-xs text-mint-500 dark:text-mint-500">Place fields & add recipients</div>
+                          <div className="text-sm font-semibold text-mint-700 dark:text-mint-400">Open Field Editor</div>
+                          <div className="text-xs text-mint-500 dark:text-mint-500">Place signature & field boxes on PDF</div>
                         </div>
                         <ChevronRight size={15} className="ml-auto text-mint-400 group-hover:text-mint-600 dark:group-hover:text-mint-300 transition-colors" />
                       </div>
@@ -735,9 +825,8 @@ export default function DocDetail() {
                   <div className="flex justify-center gap-2 py-3 px-4 bg-slate-800 border-t border-slate-700 overflow-x-auto">
                     {Array.from({ length: totalPages }, (_, i) => (
                       <button key={i} onClick={() => setPdfPage(i + 1)}
-                        className={`flex-shrink-0 w-12 h-16 rounded-lg overflow-hidden border-2 transition-all ${
-                          pdfPage === i + 1 ? "border-mint-500 shadow-lg shadow-mint-500/20" : "border-slate-600 hover:border-slate-500 opacity-60 hover:opacity-100"
-                        }`}>
+                        className={`flex-shrink-0 w-12 h-16 rounded-lg overflow-hidden border-2 transition-all ${pdfPage === i + 1 ? "border-mint-500 shadow-lg shadow-mint-500/20" : "border-slate-600 hover:border-slate-500 opacity-60 hover:opacity-100"
+                          }`}>
                         {pdfImgs[i] && <img src={pdfImgs[i]} alt="" className="w-full h-full object-cover" />}
                       </button>
                     ))}
@@ -974,8 +1063,8 @@ function StatBox({ label, value, icon: Icon }: { label: string; value: string | 
 
 function AnalyticCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: any; color: string }) {
   const colors: Record<string, { bg: string; iconBg: string; text: string }> = {
-    blue:  { bg: "bg-blue-50 dark:bg-blue-950/40",  iconBg: "bg-blue-100 dark:bg-blue-900/50",  text: "text-blue-600 dark:text-blue-400" },
-    mint:  { bg: "bg-mint-50 dark:bg-mint-950/40",  iconBg: "bg-mint-100 dark:bg-mint-900/50",  text: "text-mint-700 dark:text-mint-400" },
+    blue: { bg: "bg-blue-50 dark:bg-blue-950/40", iconBg: "bg-blue-100 dark:bg-blue-900/50", text: "text-blue-600 dark:text-blue-400" },
+    mint: { bg: "bg-mint-50 dark:bg-mint-950/40", iconBg: "bg-mint-100 dark:bg-mint-900/50", text: "text-mint-700 dark:text-mint-400" },
     amber: { bg: "bg-amber-50 dark:bg-amber-950/40", iconBg: "bg-amber-100 dark:bg-amber-900/50", text: "text-amber-600 dark:text-amber-400" },
   };
   const c = colors[color] || colors.blue;

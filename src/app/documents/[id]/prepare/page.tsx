@@ -2,20 +2,21 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowLeft, Save, Plus, X, ChevronLeft, ChevronRight,
-  PenTool, Calendar, Type, CheckSquare, Mail, User, Hash, GripVertical,
+  ArrowLeft, Save, X, ChevronLeft, ChevronRight,
+  PenTool, Calendar, Type, CheckSquare, Mail, User, Hash,
+  MousePointer2, Crosshair, Copy, Trash2, ToggleLeft, ToggleRight,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
 /* ─── Field type definitions ─── */
 const FIELD_DEFS = [
-  { type: "SIGNATURE", label: "Signature", icon: PenTool,     color: "#22c55e", w: 200, h: 60 },
-  { type: "INITIALS",  label: "Initials",  icon: Hash,        color: "#f97316", w: 90,  h: 44 },
-  { type: "DATE",      label: "Date",      icon: Calendar,    color: "#3b82f6", w: 140, h: 38 },
-  { type: "TEXT",      label: "Text",      icon: Type,        color: "#8b5cf6", w: 200, h: 38 },
-  { type: "CHECKBOX",  label: "Checkbox",  icon: CheckSquare, color: "#14b8a6", w: 28,  h: 28 },
-  { type: "NAME",      label: "Full Name", icon: User,        color: "#eab308", w: 160, h: 38 },
-  { type: "EMAIL",     label: "Email",     icon: Mail,        color: "#06b6d4", w: 200, h: 38 },
+  { type: "SIGNATURE", label: "Signature", icon: PenTool, color: "#22c55e", w: 200, h: 60 },
+  { type: "INITIALS", label: "Initials", icon: Hash, color: "#f97316", w: 90, h: 44 },
+  { type: "DATE", label: "Date", icon: Calendar, color: "#3b82f6", w: 140, h: 38 },
+  { type: "TEXT", label: "Text", icon: Type, color: "#8b5cf6", w: 200, h: 38 },
+  { type: "CHECKBOX", label: "Checkbox", icon: CheckSquare, color: "#14b8a6", w: 28, h: 28 },
+  { type: "NAME", label: "Full Name", icon: User, color: "#eab308", w: 160, h: 38 },
+  { type: "EMAIL", label: "Email", icon: Mail, color: "#06b6d4", w: 200, h: 38 },
 ] as const;
 
 const REC_COLORS = ["#22c55e", "#3b82f6", "#f97316", "#8b5cf6", "#06b6d4", "#ec4899"];
@@ -28,11 +29,11 @@ interface Field {
 }
 interface Rec { id: string; name: string; email: string; role: string; }
 
+type ToolMode = "select" | "draw" | { stamp: string };
+
 type Drag =
   | { mode: "move"; fid: string; ox: number; oy: number }
   | { mode: "resize"; fid: string; handle: string; sx: number; sy: number; orig: Field }
-  | { mode: "place-pending"; ftype: string; sx: number; sy: number }
-  | { mode: "place-active"; ftype: string; w: number; h: number }
   | null;
 
 /* ─── Component ─── */
@@ -54,11 +55,13 @@ export default function PreparePage() {
   const [scale, setScale] = useState(1);
   const [selId, setSelId] = useState<string | null>(null);
   const [selRec, setSelRec] = useState<string | null>(null);
-  const [tab, setTab] = useState<"fields" | "recipients">("fields");
-  const [newR, setNewR] = useState({ name: "", email: "", role: "SIGNER" });
-  const [addingR, setAddingR] = useState(false);
   const [drag, setDrag] = useState<Drag>(null);
-  const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
+
+  /* Tool state */
+  const [tool, setTool] = useState<ToolMode>("draw");
+  const [drawRect, setDrawRect] = useState<{ sx: number; sy: number; ex: number; ey: number } | null>(null);
+  const [drawDone, setDrawDone] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; fid: string } | null>(null);
 
   /* Refs */
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -79,14 +82,13 @@ export default function PreparePage() {
       } catch { toast.error("Failed to load document"); }
       setLoading(false);
     })();
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ─── PDF rendering ─── */
   async function renderPdf(path: string) {
     const pdfjs = await import("pdfjs-dist");
     pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
     try {
-      // Fetch in main thread (includes auth cookies), then pass ArrayBuffer to pdfjs
       const res = await fetch(path);
       if (!res.ok) throw new Error(`PDF fetch failed: ${res.status}`);
       const data = await res.arrayBuffer();
@@ -126,104 +128,6 @@ export default function PreparePage() {
     return { x: (cx - r.left) / scale, y: (cy - r.top) / scale };
   }, [scale]);
 
-  /* ─── Global drag handler ─── */
-  useEffect(() => {
-    if (!drag) return;
-
-    const onMove = (e: MouseEvent) => {
-      e.preventDefault();
-      if (!drag) return;
-
-      switch (drag.mode) {
-        case "place-pending": {
-          if (Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 5) {
-            const ft = FIELD_DEFS.find(f => f.type === drag.ftype)!;
-            setDrag({ mode: "place-active", ftype: drag.ftype, w: ft.w, h: ft.h });
-            setGhost({ x: e.clientX, y: e.clientY });
-          }
-          break;
-        }
-        case "place-active": {
-          setGhost({ x: e.clientX, y: e.clientY });
-          break;
-        }
-        case "move": {
-          const { x, y } = toLocal(e.clientX, e.clientY);
-          setFields(prev => prev.map(f => {
-            if (f.id !== drag.fid) return f;
-            return {
-              ...f,
-              x: Math.max(0, Math.min(x - drag.ox, pdfW - f.width)),
-              y: Math.max(0, Math.min(y - drag.oy, pdfH - f.height)),
-            };
-          }));
-          break;
-        }
-        case "resize": {
-          const { x, y } = toLocal(e.clientX, e.clientY);
-          const dx = x - drag.sx, dy = y - drag.sy;
-          const o = drag.orig;
-          const h = drag.handle;
-          const MIN = 20;
-          let nx = o.x, ny = o.y, nw = o.width, nh = o.height;
-          if (h.includes("e")) nw = Math.max(MIN, o.width + dx);
-          if (h.includes("w")) { const d = Math.min(dx, o.width - MIN); nx = o.x + d; nw = o.width - d; }
-          if (h.includes("s")) nh = Math.max(MIN, o.height + dy);
-          if (h.includes("n")) { const d = Math.min(dy, o.height - MIN); ny = o.y + d; nh = o.height - d; }
-          nx = Math.max(0, nx); ny = Math.max(0, ny);
-          nw = Math.min(nw, pdfW - nx); nh = Math.min(nh, pdfH - ny);
-          setFields(prev => prev.map(f => f.id === drag.fid ? { ...f, x: nx, y: ny, width: nw, height: nh } : f));
-          break;
-        }
-      }
-    };
-
-    const onUp = (e: MouseEvent) => {
-      if (drag.mode === "place-pending") {
-        addFieldAtCenter(drag.ftype);
-      }
-      if (drag.mode === "place-active" && pdfRef.current) {
-        const r = pdfRef.current.getBoundingClientRect();
-        if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
-          const { x, y } = toLocal(e.clientX, e.clientY);
-          const ft = FIELD_DEFS.find(f => f.type === drag.ftype)!;
-          const nf: Field = {
-            id: `tmp-${Date.now()}`, page: pg,
-            x: Math.max(0, Math.min(x - ft.w / 2, pdfW - ft.w)),
-            y: Math.max(0, Math.min(y - ft.h / 2, pdfH - ft.h)),
-            width: ft.w, height: ft.h, type: drag.ftype,
-            recipientId: selRec, required: true,
-          };
-          setFields(prev => [...prev, nf]);
-          setSelId(nf.id);
-        }
-        setGhost(null);
-      }
-      setDrag(null);
-    };
-
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drag, toLocal, pdfW, pdfH, pg, selRec]);
-
-  /* ─── Keyboard shortcuts ─── */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
-      if ((e.key === "Delete" || e.key === "Backspace") && selId) {
-        e.preventDefault();
-        setFields(prev => prev.filter(f => f.id !== selId));
-        setSelId(null);
-      }
-      if (e.key === "Escape") setSelId(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selId]);
-
   /* ─── Helpers ─── */
   const recColor = (rid: string | null) => {
     if (!rid) return "#94a3b8";
@@ -231,29 +135,107 @@ export default function PreparePage() {
     return REC_COLORS[i >= 0 ? i % REC_COLORS.length : 0];
   };
 
-  function addFieldAtCenter(type: string) {
-    const ft = FIELD_DEFS.find(f => f.type === type)!;
-    let cx = pdfW / 2 - ft.w / 2;
-    let cy = pdfH / 2 - ft.h / 2;
-    // Try to use visible center
-    if (scrollRef.current && pdfRef.current) {
-      const sr = scrollRef.current.getBoundingClientRect();
-      const pr = pdfRef.current.getBoundingClientRect();
-      const vcx = (Math.max(pr.left, sr.left) + Math.min(pr.right, sr.right)) / 2;
-      const vcy = (Math.max(pr.top, sr.top) + Math.min(pr.bottom, sr.bottom)) / 2;
-      cx = (vcx - pr.left) / scale - ft.w / 2;
-      cy = (vcy - pr.top) / scale - ft.h / 2;
+  /* ─── Global drag handler (move/resize) ─── */
+  useEffect(() => {
+    if (!drag) return;
+    const onMove = (e: MouseEvent) => {
+      e.preventDefault();
+      if (!drag) return;
+      if (drag.mode === "move") {
+        const { x, y } = toLocal(e.clientX, e.clientY);
+        setFields(prev => prev.map(f => {
+          if (f.id !== drag.fid) return f;
+          return { ...f, x: Math.max(0, Math.min(x - drag.ox, pdfW - f.width)), y: Math.max(0, Math.min(y - drag.oy, pdfH - f.height)) };
+        }));
+      } else if (drag.mode === "resize") {
+        const { x, y } = toLocal(e.clientX, e.clientY);
+        const dx = x - drag.sx, dy = y - drag.sy;
+        const o = drag.orig, h = drag.handle;
+        const MIN = 20;
+        let nx = o.x, ny = o.y, nw = o.width, nh = o.height;
+        if (h.includes("e")) nw = Math.max(MIN, o.width + dx);
+        if (h.includes("w")) { const d = Math.min(dx, o.width - MIN); nx = o.x + d; nw = o.width - d; }
+        if (h.includes("s")) nh = Math.max(MIN, o.height + dy);
+        if (h.includes("n")) { const d = Math.min(dy, o.height - MIN); ny = o.y + d; nh = o.height - d; }
+        nx = Math.max(0, nx); ny = Math.max(0, ny);
+        nw = Math.min(nw, pdfW - nx); nh = Math.min(nh, pdfH - ny);
+        setFields(prev => prev.map(f => f.id === drag.fid ? { ...f, x: nx, y: ny, width: nw, height: nh } : f));
+      }
+    };
+    const onUp = () => setDrag(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [drag, toLocal, pdfW, pdfH]);
+
+  /* ─── Area-draw handler ─── */
+  function onCanvasDown(e: React.MouseEvent) {
+    if (e.button !== 0) return;
+    setCtxMenu(null);
+    setDrawDone(null);
+
+    // Stamp mode: click to place
+    if (typeof tool === "object" && "stamp" in tool) {
+      const { x, y } = toLocal(e.clientX, e.clientY);
+      const ft = FIELD_DEFS.find(f => f.type === tool.stamp)!;
+      const nf: Field = {
+        id: `tmp-${Date.now()}`, page: pg,
+        x: Math.max(0, Math.min(x - ft.w / 2, pdfW - ft.w)),
+        y: Math.max(0, Math.min(y - ft.h / 2, pdfH - ft.h)),
+        width: ft.w, height: ft.h, type: tool.stamp,
+        recipientId: selRec, required: true,
+      };
+      setFields(prev => [...prev, nf]);
+      setSelId(nf.id);
+      return;
     }
-    cx = Math.max(0, Math.min(cx, pdfW - ft.w));
-    cy = Math.max(0, Math.min(cy, pdfH - ft.h));
-    const nf: Field = { id: `tmp-${Date.now()}`, page: pg, x: cx, y: cy, width: ft.w, height: ft.h, type, recipientId: selRec, required: true };
-    setFields(prev => [...prev, nf]);
-    setSelId(nf.id);
+
+    // Draw mode: start drawing rectangle
+    if (tool === "draw") {
+      const { x, y } = toLocal(e.clientX, e.clientY);
+      setDrawRect({ sx: x, sy: y, ex: x, ey: y });
+      setSelId(null);
+      return;
+    }
+
+    // Select mode: deselect
+    setSelId(null);
   }
 
+  function onCanvasMove(e: React.MouseEvent) {
+    if (!drawRect) return;
+    const { x, y } = toLocal(e.clientX, e.clientY);
+    setDrawRect(prev => prev ? { ...prev, ex: Math.max(0, Math.min(x, pdfW)), ey: Math.max(0, Math.min(y, pdfH)) } : null);
+  }
+
+  function onCanvasUp() {
+    if (!drawRect) return;
+    const x = Math.min(drawRect.sx, drawRect.ex);
+    const y = Math.min(drawRect.sy, drawRect.ey);
+    const w = Math.abs(drawRect.ex - drawRect.sx);
+    const h = Math.abs(drawRect.ey - drawRect.sy);
+    setDrawRect(null);
+    if (w < 15 || h < 15) return; // too small, ignore
+    setDrawDone({ x, y, w, h });
+  }
+
+  function placeDrawnField(type: string) {
+    if (!drawDone) return;
+    const nf: Field = {
+      id: `tmp-${Date.now()}`, page: pg,
+      x: drawDone.x, y: drawDone.y, width: drawDone.w, height: drawDone.h,
+      type, recipientId: selRec, required: true,
+    };
+    setFields(prev => [...prev, nf]);
+    setSelId(nf.id);
+    setDrawDone(null);
+  }
+
+  /* ─── Field interactions ─── */
   function startMove(e: React.MouseEvent, field: Field) {
     e.preventDefault(); e.stopPropagation();
     setSelId(field.id);
+    setCtxMenu(null);
     const { x, y } = toLocal(e.clientX, e.clientY);
     setDrag({ mode: "move", fid: field.id, ox: x - field.x, oy: y - field.y });
   }
@@ -265,11 +247,70 @@ export default function PreparePage() {
     setDrag({ mode: "resize", fid: field.id, handle, sx: x, sy: y, orig: { ...field } });
   }
 
-  function startPlace(e: React.MouseEvent, ftype: string) {
-    e.preventDefault();
-    setDrag({ mode: "place-pending", ftype, sx: e.clientX, sy: e.clientY });
+  function onFieldContext(e: React.MouseEvent, field: Field) {
+    e.preventDefault(); e.stopPropagation();
+    setSelId(field.id);
+    setCtxMenu({ x: e.clientX, y: e.clientY, fid: field.id });
   }
 
+  function duplicateField(fid: string) {
+    const f = fields.find(ff => ff.id === fid);
+    if (!f) return;
+    const nf: Field = { ...f, id: `tmp-${Date.now()}`, x: f.x + 20, y: f.y + 20 };
+    setFields(prev => [...prev, nf]);
+    setSelId(nf.id);
+    setCtxMenu(null);
+  }
+
+  function deleteField(fid: string) {
+    setFields(prev => prev.filter(f => f.id !== fid));
+    if (selId === fid) setSelId(null);
+    setCtxMenu(null);
+  }
+
+  function toggleRequired(fid: string) {
+    setFields(prev => prev.map(f => f.id === fid ? { ...f, required: !f.required } : f));
+    setCtxMenu(null);
+  }
+
+  function assignField(fid: string, rid: string | null) {
+    setFields(prev => prev.map(f => f.id === fid ? { ...f, recipientId: rid } : f));
+    setCtxMenu(null);
+  }
+
+  /* ─── Keyboard shortcuts ─── */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+      if ((e.key === "Delete" || e.key === "Backspace") && selId) {
+        e.preventDefault();
+        deleteField(selId);
+      }
+      if (e.key === "Escape") {
+        setSelId(null);
+        setDrawRect(null);
+        setDrawDone(null);
+        setCtxMenu(null);
+        if (typeof tool === "object") setTool("draw");
+      }
+      // D for draw, V for select
+      if (e.key === "d" || e.key === "D") setTool("draw");
+      if (e.key === "v" || e.key === "V") setTool("select");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selId, tool]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ─── Close context menu on outside click ─── */
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [ctxMenu]);
+
+  /* ─── Save ─── */
   async function save() {
     setSaving(true);
     try {
@@ -280,28 +321,9 @@ export default function PreparePage() {
     setSaving(false);
   }
 
-  async function addRecipient() {
-    if (!newR.name || !newR.email) { toast.error("Name & email required"); return; }
-    const res = await fetch(`/api/documents/${id}/recipients`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newR) });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error); return; }
-    setRecs(prev => [...prev, data]);
-    setSelRec(data.id);
-    setNewR({ name: "", email: "", role: "SIGNER" });
-    setAddingR(false);
-    toast.success("Recipient added!");
-  }
-
-  async function removeRec(rid: string) {
-    await fetch(`/api/documents/${id}/recipients/${rid}`, { method: "DELETE" });
-    setRecs(prev => prev.filter(r => r.id !== rid));
-    setFields(prev => prev.map(f => f.recipientId === rid ? { ...f, recipientId: null } : f));
-    if (selRec === rid) setSelRec(recs.find(r => r.id !== rid)?.id || null);
-  }
-
   /* ─── Loading ─── */
   if (loading) return (
-    <div className="h-screen bg-slate-50 dark:bg-neutral-950 flex items-center justify-center">
+    <div className="h-screen bg-neutral-950 flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-mint-500 border-t-transparent rounded-full animate-spin" />
     </div>
   );
@@ -309,296 +331,314 @@ export default function PreparePage() {
   const pgFields = fields.filter(f => f.page === pg);
   const selField = fields.find(f => f.id === selId);
   const isDragging = drag?.mode === "move" || drag?.mode === "resize";
+  const isDrawing = drawRect !== null;
+
+  const cursorClass = tool === "draw"
+    ? "cursor-crosshair"
+    : typeof tool === "object" ? "cursor-cell" : "cursor-default";
 
   /* ─── JSX ─── */
   return (
-    <div className={`h-screen bg-slate-50 dark:bg-neutral-950 flex flex-col overflow-hidden ${isDragging ? "select-none" : ""}`}>
+    <div className={`h-screen bg-neutral-950 flex flex-col overflow-hidden ${isDragging || isDrawing ? "select-none" : ""}`}>
 
-      {/* ─── Toolbar ─── */}
-      <div className="flex items-center gap-3 px-4 h-14 border-b border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex-shrink-0 z-50">
-        <button onClick={() => router.back()} className="p-2 -ml-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200 hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors">
-          <ArrowLeft size={18} />
+      {/* ─── Minimal top bar ─── */}
+      <div className="flex items-center gap-3 px-4 h-12 bg-neutral-900 border-b border-neutral-800 flex-shrink-0 z-50">
+        <button onClick={() => router.back()} className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 transition-colors">
+          <ArrowLeft size={16} />
         </button>
-        <span className="font-semibold text-slate-800 dark:text-white truncate flex-1 text-sm">{doc?.title}</span>
-        {totalPg > 1 && (
-          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-neutral-800 rounded-lg px-1 py-0.5">
-            <button onClick={() => setPg(p => Math.max(1, p - 1))} disabled={pg === 1}
-              className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-neutral-700 disabled:opacity-30 text-slate-500 dark:text-neutral-400 transition-colors">
-              <ChevronLeft size={14} />
-            </button>
-            <span className="text-xs text-slate-500 dark:text-neutral-400 font-medium w-16 text-center">{pg} / {totalPg}</span>
-            <button onClick={() => setPg(p => Math.min(totalPg, p + 1))} disabled={pg === totalPg}
-              className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-neutral-700 disabled:opacity-30 text-slate-500 dark:text-neutral-400 transition-colors">
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        )}
+        <span className="font-medium text-neutral-300 truncate flex-1 text-sm">{doc?.title}</span>
         <button onClick={save} disabled={saving}
-          className="flex items-center gap-2 px-5 py-2 bg-mint-500 hover:bg-mint-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors shadow-sm shadow-mint-500/20">
-          {saving ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Save size={15} />}
+          className="flex items-center gap-2 px-4 py-1.5 bg-mint-500 hover:bg-mint-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50 transition-colors">
+          {saving ? <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Save size={14} />}
           Save
         </button>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      {/* ─── Canvas area ─── */}
+      <div ref={scrollRef}
+        className={`flex-1 overflow-auto flex justify-center py-8 px-4 bg-neutral-950 relative ${cursorClass}`}
+        onMouseDown={e => { if (e.target === e.currentTarget || (pdfRef.current && e.target === pdfRef.current.querySelector('.pdf-click-area'))) { } }}
+        onClick={() => { if (!drawDone) setCtxMenu(null); }}
+      >
+        {pdfImgs.length > 0 ? (
+          <div ref={pdfRef} className="relative flex-shrink-0"
+            style={{ width: pdfW * scale, height: pdfH * scale }}
+            onMouseDown={onCanvasDown}
+            onMouseMove={onCanvasMove}
+            onMouseUp={onCanvasUp}
+          >
+            {/* PDF image */}
+            <img src={pdfImgs[pg - 1]} alt="" draggable={false}
+              className="absolute inset-0 w-full h-full shadow-2xl rounded-lg pointer-events-none" />
 
-        {/* ─── Sidebar ─── */}
-        <div className="w-72 border-r border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex flex-col flex-shrink-0">
-          {/* Tabs */}
-          <div className="flex border-b border-slate-200 dark:border-neutral-800">
-            {(["fields", "recipients"] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`flex-1 py-3 text-sm font-medium capitalize transition-colors ${
-                  tab === t
-                    ? "text-mint-600 dark:text-mint-400 border-b-2 border-mint-500 -mb-px"
-                    : "text-slate-400 dark:text-neutral-500 hover:text-slate-600 dark:hover:text-neutral-300"
-                }`}>
-                {t}
-              </button>
-            ))}
-          </div>
+            {/* Click area for PDF surface */}
+            <div className="pdf-click-area absolute inset-0" style={{ zIndex: 0 }} />
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {tab === "fields" ? (
-              <>
-                {/* Assign to */}
-                {recs.length > 0 && (
-                  <div className="mb-3">
-                    <label className="text-[10px] font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider mb-1.5 block">Assign to</label>
-                    <select value={selRec || ""} onChange={e => setSelRec(e.target.value || null)}
-                      className="w-full px-2.5 py-2 bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl text-sm text-slate-700 dark:text-neutral-200 focus:outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 dark:focus:ring-mint-900/30 transition-all">
-                      <option value="">Unassigned</option>
-                      {recs.map((r, i) => (
-                        <option key={r.id} value={r.id}>{r.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+            {/* Area-draw rectangle */}
+            {drawRect && (() => {
+              const x = Math.min(drawRect.sx, drawRect.ex) * scale;
+              const y = Math.min(drawRect.sy, drawRect.ey) * scale;
+              const w = Math.abs(drawRect.ex - drawRect.sx) * scale;
+              const h = Math.abs(drawRect.ey - drawRect.sy) * scale;
+              return (
+                <div className="absolute border-2 border-dashed border-mint-400 bg-mint-500/10 rounded-sm pointer-events-none"
+                  style={{ left: x, top: y, width: w, height: h, zIndex: 30 }} />
+              );
+            })()}
 
-                {/* Field palette */}
-                <p className="text-[10px] font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider mb-1.5">Drag onto document</p>
-                {FIELD_DEFS.map(ft => {
-                  const Icon = ft.icon;
-                  return (
-                    <div key={ft.type}
-                      onMouseDown={e => startPlace(e, ft.type)}
-                      className="w-full flex items-center gap-2.5 p-2.5 bg-slate-50 dark:bg-neutral-800 hover:bg-slate-100 dark:hover:bg-neutral-700 border border-slate-100 dark:border-neutral-700 hover:border-slate-200 dark:hover:border-neutral-600 rounded-xl transition-all cursor-grab active:cursor-grabbing group select-none">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: ft.color }} />
-                      <Icon size={14} className="text-slate-400 dark:text-neutral-500 group-hover:text-slate-600 dark:group-hover:text-neutral-300 transition-colors flex-shrink-0" />
-                      <span className="text-sm text-slate-600 dark:text-neutral-300 flex-1">{ft.label}</span>
-                      <GripVertical size={14} className="text-slate-300 dark:text-neutral-600 group-hover:text-slate-400 dark:group-hover:text-neutral-500 transition-colors flex-shrink-0" />
-                    </div>
-                  );
-                })}
-
-                {/* Selected field properties */}
-                {selField && (
-                  <div className="mt-4 pt-4 border-t border-slate-200 dark:border-neutral-700 space-y-3">
-                    <p className="text-[10px] font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider">Field Properties</p>
-                    <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-neutral-800 rounded-lg">
-                      <div className="w-3 h-3 rounded-full" style={{ background: FIELD_DEFS.find(f => f.type === selField.type)?.color }} />
-                      <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">{FIELD_DEFS.find(f => f.type === selField.type)?.label}</span>
-                    </div>
-                    <select value={selField.recipientId || ""} onChange={e => setFields(prev => prev.map(f => f.id === selId ? { ...f, recipientId: e.target.value || null } : f))}
-                      className="w-full px-2.5 py-2 bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl text-sm text-slate-700 dark:text-neutral-200 focus:outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 dark:focus:ring-mint-900/30 transition-all">
-                      <option value="">Unassigned</option>
-                      {recs.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                    </select>
-                    <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-neutral-300 cursor-pointer">
-                      <input type="checkbox" checked={selField.required} onChange={e => setFields(prev => prev.map(f => f.id === selId ? { ...f, required: e.target.checked } : f))} className="accent-mint-500 w-4 h-4" />
-                      Required
-                    </label>
-                    <div className="text-[10px] text-slate-400 dark:text-neutral-500">
-                      Position: {Math.round(selField.x)}, {Math.round(selField.y)} · Size: {Math.round(selField.width)}×{Math.round(selField.height)}
-                    </div>
-                    <button onClick={() => { setFields(prev => prev.filter(f => f.id !== selId)); setSelId(null); }}
-                      className="w-full py-2 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded-xl text-sm font-medium transition-colors">
-                      Delete Field
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                {recs.map((r, i) => (
-                  <div key={r.id} onClick={() => setSelRec(r.id)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                      selRec === r.id
-                        ? "border-mint-400 dark:border-mint-700 bg-mint-50/50 dark:bg-mint-950/30"
-                        : "border-slate-100 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 hover:border-slate-200 dark:hover:border-neutral-600"
-                    }`}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style={{ background: REC_COLORS[i % REC_COLORS.length] }}>
-                        {r.name[0]?.toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-slate-700 dark:text-neutral-200 truncate">{r.name}</div>
-                        <div className="text-xs text-slate-400 dark:text-neutral-500 truncate">{r.email}</div>
-                      </div>
-                      <button onClick={e => { e.stopPropagation(); removeRec(r.id); }}
-                        className="text-slate-300 dark:text-neutral-600 hover:text-red-500 transition-colors p-1">
-                        <X size={13} />
+            {/* Drawn area with field type picker */}
+            {drawDone && (
+              <div className="absolute" style={{ left: drawDone.x * scale, top: drawDone.y * scale, width: drawDone.w * scale, height: drawDone.h * scale, zIndex: 30 }}>
+                <div className="absolute inset-0 border-2 border-mint-400 bg-mint-500/15 rounded-sm" />
+                {/* Field type picker popover */}
+                <div className="absolute left-1/2 -translate-x-1/2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl p-2 flex gap-1 z-40"
+                  style={{ top: `calc(100% + 8px)` }}
+                  onClick={e => e.stopPropagation()}
+                  onMouseDown={e => e.stopPropagation()}>
+                  {FIELD_DEFS.map(ft => {
+                    const Icon = ft.icon;
+                    return (
+                      <button key={ft.type}
+                        onClick={() => placeDrawnField(ft.type)}
+                        className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-neutral-800 transition-colors group"
+                        title={ft.label}>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{ background: ft.color + "20" }}>
+                          <Icon size={14} style={{ color: ft.color }} />
+                        </div>
+                        <span className="text-[9px] text-neutral-500 group-hover:text-neutral-300 transition-colors leading-none">{ft.label}</span>
                       </button>
+                    );
+                  })}
+                  <button onClick={() => setDrawDone(null)}
+                    className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-neutral-800 text-neutral-600 hover:text-red-400 transition-colors"
+                    title="Cancel">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-neutral-800">
+                      <X size={14} />
                     </div>
-                    <div className="mt-1.5 text-xs text-slate-400 dark:text-neutral-500">
-                      {fields.filter(f => f.recipientId === r.id).length} fields · {r.role}
-                    </div>
-                  </div>
-                ))}
-                {addingR ? (
-                  <div className="p-3 bg-slate-50 dark:bg-neutral-800 border border-mint-200 dark:border-mint-800 rounded-xl space-y-2">
-                    <input placeholder="Full name" value={newR.name} onChange={e => setNewR(p => ({ ...p, name: e.target.value }))}
-                      className="w-full px-2.5 py-2 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm text-slate-700 dark:text-neutral-200 placeholder:text-slate-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 dark:focus:ring-mint-900/30 transition-all" />
-                    <input placeholder="Email" type="email" value={newR.email} onChange={e => setNewR(p => ({ ...p, email: e.target.value }))}
-                      className="w-full px-2.5 py-2 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm text-slate-700 dark:text-neutral-200 placeholder:text-slate-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 dark:focus:ring-mint-900/30 transition-all" />
-                    <select value={newR.role} onChange={e => setNewR(p => ({ ...p, role: e.target.value }))}
-                      className="w-full px-2.5 py-2 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm text-slate-700 dark:text-neutral-200 focus:outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 dark:focus:ring-mint-900/30 transition-all">
-                      <option value="SIGNER">Signer</option>
-                      <option value="CC">CC only</option>
-                    </select>
-                    <div className="flex gap-2">
-                      <button onClick={() => setAddingR(false)}
-                        className="flex-1 py-1.5 bg-slate-100 dark:bg-neutral-700 hover:bg-slate-200 dark:hover:bg-neutral-600 text-slate-500 dark:text-neutral-300 rounded-lg text-xs font-medium transition-colors">
-                        Cancel
-                      </button>
-                      <button onClick={addRecipient}
-                        className="flex-1 py-1.5 bg-mint-500 hover:bg-mint-600 text-white rounded-lg text-xs font-semibold transition-colors">
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => setAddingR(true)}
-                    className="w-full py-2.5 border border-dashed border-slate-200 dark:border-neutral-700 hover:border-mint-300 dark:hover:border-mint-700 rounded-xl text-sm text-slate-400 dark:text-neutral-500 hover:text-mint-600 dark:hover:text-mint-400 flex items-center justify-center gap-2 transition-all">
-                    <Plus size={13} /> Add Recipient
+                    <span className="text-[9px] leading-none">Cancel</span>
                   </button>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* ─── PDF Canvas ─── */}
-        <div ref={scrollRef}
-          className="flex-1 overflow-auto bg-slate-100/50 dark:bg-neutral-950/50 flex justify-center py-6 px-4"
-          onClick={() => setSelId(null)}>
-          {pdfImgs.length > 0 ? (
-            <div ref={pdfRef} className="relative flex-shrink-0"
-              style={{ width: pdfW * scale, height: pdfH * scale }}>
-              {/* PDF image */}
-              <img src={pdfImgs[pg - 1]} alt="" draggable={false}
-                className="absolute inset-0 w-full h-full shadow-2xl rounded-lg"
-                style={{ pointerEvents: "none" }} />
-
-              {/* Fields */}
-              {pgFields.map(f => {
-                const color = recColor(f.recipientId);
-                const isSel = f.id === selId;
-                const ft = FIELD_DEFS.find(t => t.type === f.type);
-                const Icon = ft?.icon || Type;
-                const isMoving = drag?.mode === "move" && (drag as any).fid === f.id;
-
-                return (
-                  <div key={f.id}
-                    className={`absolute group ${isMoving ? "cursor-grabbing" : "cursor-grab"}`}
-                    style={{
-                      left: f.x * scale,
-                      top: f.y * scale,
-                      width: f.width * scale,
-                      height: f.height * scale,
-                      zIndex: isSel ? 20 : 10,
-                    }}
-                    onMouseDown={e => startMove(e, f)}
-                    onClick={e => { e.stopPropagation(); setSelId(f.id); }}>
-
-                    {/* Field body */}
-                    <div className="absolute inset-0 rounded-md transition-all duration-100"
-                      style={{
-                        background: color + "12",
-                        border: isSel ? `2px solid ${color}` : `1.5px dashed ${color}80`,
-                        boxShadow: isSel ? `0 0 0 3px ${color}20, 0 2px 8px ${color}15` : "none",
-                      }} />
-
-                    {/* Label badge */}
-                    <div className="absolute left-0 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-white text-[10px] font-semibold whitespace-nowrap pointer-events-none transition-opacity"
-                      style={{
-                        background: color,
-                        top: -22,
-                        opacity: isSel ? 1 : 0.85,
-                      }}>
-                      <Icon size={10} />
-                      {ft?.label}{f.required && " *"}
-                    </div>
-
-                    {/* Resize handles (selected only) */}
-                    {isSel && (
-                      <>
-                        {(["nw", "ne", "sw", "se"] as const).map(h => (
-                          <div key={h}
-                            className="absolute w-[10px] h-[10px] rounded-full bg-white border-2 z-30 hover:scale-125 transition-transform"
-                            style={{
-                              borderColor: color,
-                              cursor: h === "nw" || h === "se" ? "nwse-resize" : "nesw-resize",
-                              top: h.includes("n") ? -5 : undefined,
-                              bottom: h.includes("s") ? -5 : undefined,
-                              left: h.includes("w") ? -5 : undefined,
-                              right: h.includes("e") ? -5 : undefined,
-                            }}
-                            onMouseDown={e => startResize(e, f, h)} />
-                        ))}
-                        {/* Delete button */}
-                        <button
-                          className="absolute -top-[22px] -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white z-30 shadow-sm transition-colors"
-                          onMouseDown={e => {
-                            e.stopPropagation(); e.preventDefault();
-                            setFields(prev => prev.filter(ff => ff.id !== f.id));
-                            setSelId(null);
-                          }}>
-                          <X size={10} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Click-to-deselect overlay (behind fields) */}
-              <div className="absolute inset-0" style={{ zIndex: 0 }} onClick={() => setSelId(null)} />
-            </div>
-          ) : (
-            <div className="flex items-center justify-center text-slate-400 dark:text-neutral-500 flex-1">
-              <div className="text-center">
-                <div className="w-10 h-10 border-2 border-slate-200 dark:border-neutral-700 border-t-mint-500 rounded-full animate-spin mx-auto mb-3" />
-                <p className="text-sm">Rendering PDF...</p>
+                </div>
               </div>
+            )}
+
+            {/* ─── Fields ─── */}
+            {pgFields.map(f => {
+              const color = recColor(f.recipientId);
+              const isSel = f.id === selId;
+              const ft = FIELD_DEFS.find(t => t.type === f.type);
+              const Icon = ft?.icon || Type;
+              const isMoving = drag?.mode === "move" && drag.fid === f.id;
+
+              return (
+                <div key={f.id}
+                  className={`absolute group ${isMoving ? "cursor-grabbing" : "cursor-grab"}`}
+                  style={{
+                    left: f.x * scale, top: f.y * scale,
+                    width: f.width * scale, height: f.height * scale,
+                    zIndex: isSel ? 20 : 10,
+                  }}
+                  onMouseDown={e => { if (tool === "select" || isSel) startMove(e, f); else { e.stopPropagation(); setSelId(f.id); } }}
+                  onClick={e => { e.stopPropagation(); setSelId(f.id); }}
+                  onContextMenu={e => onFieldContext(e, f)}>
+
+                  {/* Field body */}
+                  <div className="absolute inset-0 rounded-md transition-all duration-100"
+                    style={{
+                      background: color + "12",
+                      border: isSel ? `2px solid ${color}` : `1.5px dashed ${color}80`,
+                      boxShadow: isSel ? `0 0 0 3px ${color}20, 0 2px 8px ${color}15` : "none",
+                    }} />
+
+                  {/* Label badge */}
+                  <div className="absolute left-0 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-white text-[10px] font-semibold whitespace-nowrap pointer-events-none transition-opacity"
+                    style={{ background: color, top: -22, opacity: isSel ? 1 : 0.85 }}>
+                    <Icon size={10} />{ft?.label}{f.required && " *"}
+                  </div>
+
+                  {/* Resize handles (selected only) */}
+                  {isSel && (
+                    <>
+                      {(["nw", "ne", "sw", "se"] as const).map(h => (
+                        <div key={h}
+                          className="absolute w-[10px] h-[10px] rounded-full bg-white border-2 z-30 hover:scale-125 transition-transform"
+                          style={{
+                            borderColor: color,
+                            cursor: h === "nw" || h === "se" ? "nwse-resize" : "nesw-resize",
+                            top: h.includes("n") ? -5 : undefined,
+                            bottom: h.includes("s") ? -5 : undefined,
+                            left: h.includes("w") ? -5 : undefined,
+                            right: h.includes("e") ? -5 : undefined,
+                          }}
+                          onMouseDown={e => startResize(e, f, h)} />
+                      ))}
+                      {/* Delete button */}
+                      <button
+                        className="absolute -top-[22px] -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white z-30 shadow-sm transition-colors"
+                        onMouseDown={e => { e.stopPropagation(); e.preventDefault(); deleteField(f.id); }}>
+                        <X size={10} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center text-neutral-500 flex-1">
+            <div className="text-center">
+              <div className="w-10 h-10 border-2 border-neutral-700 border-t-mint-500 rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-sm">Rendering PDF...</p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* ─── Drag ghost (sidebar → PDF) ─── */}
-      {drag?.mode === "place-active" && ghost && (
-        <div className="fixed pointer-events-none z-[9999]"
-          style={{ left: ghost.x - (drag.w * scale) / 2, top: ghost.y - (drag.h * scale) / 2 }}>
-          <div className="rounded-lg border-2 border-dashed opacity-70"
-            style={{
-              width: drag.w * scale,
-              height: drag.h * scale,
-              borderColor: FIELD_DEFS.find(f => f.type === drag.ftype)?.color,
-              background: (FIELD_DEFS.find(f => f.type === drag.ftype)?.color || "#888") + "20",
-            }}>
-            <div className="absolute -top-5 left-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-[10px] font-semibold whitespace-nowrap"
-              style={{ background: FIELD_DEFS.find(f => f.type === drag.ftype)?.color }}>
-              {FIELD_DEFS.find(f => f.type === drag.ftype)?.label}
-            </div>
-          </div>
+      {/* ─── Page thumbnails strip (multi-page only) ─── */}
+      {totalPg > 1 && (
+        <div className="flex justify-center gap-2 py-2 px-4 bg-neutral-900/80 backdrop-blur-sm border-t border-neutral-800 overflow-x-auto flex-shrink-0">
+          {Array.from({ length: totalPg }, (_, i) => {
+            const pageNum = i + 1;
+            const hasFields = fields.some(f => f.page === pageNum);
+            return (
+              <button key={i} onClick={() => setPg(pageNum)}
+                className={`relative flex-shrink-0 w-14 h-[4.5rem] rounded-lg overflow-hidden border-2 transition-all ${pg === pageNum ? "border-mint-500 shadow-lg shadow-mint-500/20" : "border-neutral-700 hover:border-neutral-500 opacity-60 hover:opacity-100"
+                  }`}>
+                {pdfImgs[i] && <img src={pdfImgs[i]} alt="" className="w-full h-full object-cover" />}
+                <span className="absolute bottom-0.5 left-0 right-0 text-[8px] text-center text-white/80 font-medium">{pageNum}</span>
+                {hasFields && (
+                  <div className="absolute top-1 right-1 w-2 h-2 bg-mint-400 rounded-full" />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* ─── Keyboard hint ─── */}
-      {selId && !isDragging && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-neutral-900/90 dark:bg-neutral-800/90 text-white/80 text-xs rounded-full backdrop-blur-sm z-50 shadow-lg">
-          <span className="font-medium text-white/60">⌫</span> Delete  ·  <span className="font-medium text-white/60">Esc</span> Deselect  ·  Drag corners to resize
+      {/* ─── Floating bottom toolbar ─── */}
+      <div className="flex justify-center pb-4 pt-2 bg-neutral-950 flex-shrink-0">
+        <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-700 rounded-2xl px-2 py-1.5 shadow-2xl shadow-black/50">
+
+          {/* Tool modes */}
+          <div className="flex items-center gap-0.5 pr-2 mr-1 border-r border-neutral-700">
+            <button onClick={() => setTool("select")} title="Select tool (V)"
+              className={`p-2 rounded-lg transition-all ${tool === "select" ? "bg-neutral-700 text-white" : "text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800"}`}>
+              <MousePointer2 size={15} />
+            </button>
+            <button onClick={() => { setTool("draw"); setDrawDone(null); }} title="Draw area tool (D)"
+              className={`p-2 rounded-lg transition-all ${tool === "draw" ? "bg-mint-500/20 text-mint-400 ring-1 ring-mint-500/30" : "text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800"}`}>
+              <Crosshair size={15} />
+            </button>
+          </div>
+
+          {/* Field type stamps */}
+          <div className="flex items-center gap-0.5 pr-2 mr-1 border-r border-neutral-700">
+            {FIELD_DEFS.map(ft => {
+              const Icon = ft.icon;
+              const isActive = typeof tool === "object" && "stamp" in tool && tool.stamp === ft.type;
+              return (
+                <button key={ft.type}
+                  onClick={() => setTool(isActive ? "draw" : { stamp: ft.type })}
+                  title={`${ft.label} — click to stamp`}
+                  className={`p-2 rounded-lg transition-all ${isActive ? "" : "hover:bg-neutral-800"}`}
+                  style={isActive ? { background: ft.color + "20", color: ft.color, boxShadow: `inset 0 0 0 1px ${ft.color}40` } : { color: "#737373" }}>
+                  <Icon size={15} />
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Recipient chips */}
+          {recs.length > 0 && (
+            <div className="flex items-center gap-1 pr-2 mr-1 border-r border-neutral-700">
+              {recs.map((r, i) => {
+                const c = REC_COLORS[i % REC_COLORS.length];
+                const isActive = selRec === r.id;
+                return (
+                  <button key={r.id} onClick={() => setSelRec(r.id)} title={`Assign to: ${r.name}`}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all ${isActive ? "" : "opacity-50 hover:opacity-80"}`}
+                    style={isActive ? { background: c + "20", color: c, boxShadow: `inset 0 0 0 1px ${c}40` } : {}}>
+                    <div className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white" style={{ background: c }}>
+                      {r.name[0]?.toUpperCase()}
+                    </div>
+                    <span className={isActive ? "" : "text-neutral-500 hidden sm:inline"}>{r.name.split(" ")[0]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Page navigation */}
+          {totalPg > 1 && (
+            <div className="flex items-center gap-1 pr-2 mr-1 border-r border-neutral-700">
+              <button onClick={() => setPg(p => Math.max(1, p - 1))} disabled={pg === 1}
+                className="p-1.5 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 disabled:opacity-30 transition-colors">
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-xs text-neutral-400 font-medium w-12 text-center">{pg}/{totalPg}</span>
+              <button onClick={() => setPg(p => Math.min(totalPg, p + 1))} disabled={pg === totalPg}
+                className="p-1.5 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 disabled:opacity-30 transition-colors">
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Field count */}
+          <div className="text-[10px] text-neutral-600 font-medium px-2">
+            {fields.length} field{fields.length !== 1 ? "s" : ""}
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Right-click context menu ─── */}
+      {ctxMenu && (() => {
+        const cf = fields.find(f => f.id === ctxMenu.fid);
+        if (!cf) return null;
+        return (
+          <div className="fixed z-[100] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl py-1.5 w-48 overflow-hidden"
+            style={{ left: ctxMenu.x, top: ctxMenu.y }}
+            onClick={e => e.stopPropagation()}>
+            {/* Assign submenu */}
+            {recs.length > 0 && (
+              <>
+                <div className="px-3 py-1.5 text-[10px] text-neutral-500 uppercase tracking-wider font-semibold">Assign to</div>
+                {recs.map((r, i) => (
+                  <button key={r.id} onClick={() => assignField(ctxMenu.fid, r.id)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-neutral-800 transition-colors text-left ${cf.recipientId === r.id ? "text-white" : "text-neutral-400"}`}>
+                    <div className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white" style={{ background: REC_COLORS[i % REC_COLORS.length] }}>
+                      {r.name[0]?.toUpperCase()}
+                    </div>
+                    {r.name}
+                    {cf.recipientId === r.id && <span className="ml-auto text-mint-400 text-xs">✓</span>}
+                  </button>
+                ))}
+                <div className="border-t border-neutral-800 my-1" />
+              </>
+            )}
+            <button onClick={() => duplicateField(ctxMenu.fid)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-800 transition-colors text-left">
+              <Copy size={13} />Duplicate
+            </button>
+            <button onClick={() => toggleRequired(ctxMenu.fid)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-800 transition-colors text-left">
+              {cf.required ? <ToggleRight size={13} className="text-mint-400" /> : <ToggleLeft size={13} />}
+              {cf.required ? "Required" : "Optional"}
+            </button>
+            <div className="border-t border-neutral-800 my-1" />
+            <button onClick={() => deleteField(ctxMenu.fid)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:bg-neutral-800 transition-colors text-left">
+              <Trash2 size={13} />Delete
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* ─── Keyboard hints ─── */}
+      {!isDragging && !isDrawing && !drawDone && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 px-4 py-2 bg-neutral-900/80 text-neutral-500 text-[10px] rounded-full backdrop-blur-sm z-40 flex items-center gap-3 border border-neutral-800">
+          <span><kbd className="text-neutral-400 bg-neutral-800 px-1 py-0.5 rounded text-[9px]">V</kbd> Select</span>
+          <span><kbd className="text-neutral-400 bg-neutral-800 px-1 py-0.5 rounded text-[9px]">D</kbd> Draw</span>
+          {selId && <><span><kbd className="text-neutral-400 bg-neutral-800 px-1 py-0.5 rounded text-[9px]">⌫</kbd> Delete</span><span><kbd className="text-neutral-400 bg-neutral-800 px-1 py-0.5 rounded text-[9px]">Esc</kbd> Deselect</span></>}
+          <span className="text-neutral-600">Right-click for more</span>
         </div>
       )}
     </div>
