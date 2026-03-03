@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest, { params }: { params: { docId: string; token: string } }) {
   const recipient = await prisma.recipient.findUnique({
     where: { token: params.token },
-    include: { document: { include: { fields: { where: { recipientId: { not: null } } } } } },
+    include: { document: { include: { fields: true } } },
   });
 
   if (!recipient || recipient.documentId !== params.docId) {
@@ -54,9 +54,9 @@ export async function GET(req: NextRequest, { params }: { params: { docId: strin
     await log(doc.id, "RECIPIENT_VIEWED", recipient.id, ip);
   }
 
-  // Only return fields assigned to this recipient
+  // Return fields assigned to this recipient OR unassigned fields
   const myFields = doc.fields
-    .filter((f) => f.recipientId === recipient.id)
+    .filter((f) => f.recipientId === recipient.id || !f.recipientId)
     .map((f) => ({ id: f.id, page: f.page, x: f.x, y: f.y, width: f.width, height: f.height, type: f.type, label: f.label, required: f.required }));
 
   return NextResponse.json({

@@ -53,8 +53,10 @@ export async function middleware(req: NextRequest) {
   );
 
   // Prevent HTML page caching so deploys take effect immediately
+  // Cache-Control → browser, Netlify-CDN-Cache-Control → Netlify Edge CDN
   if (!pathname.startsWith("/_next/static") && !pathname.startsWith("/api/")) {
     headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    headers.set("Netlify-CDN-Cache-Control", "no-store");
   }
 
   // Public routes — pass through with security headers

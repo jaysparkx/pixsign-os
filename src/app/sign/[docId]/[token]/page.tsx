@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, ChevronLeft, ChevronRight, Pen, Type, Upload, X, AlertCircle, Download, Clock } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Pen, Type, Upload, X, AlertCircle, Download, Clock, ArrowDown, Navigation } from "lucide-react";
 import toast from "react-hot-toast";
 
 function useCountdown(expiresAt: string | null) {
@@ -101,13 +101,51 @@ export default function SignPage() {
     }).catch(() => setError("Failed to load document")).finally(() => setLoading(false));
   }, []);
 
+  /* ─── Highlight / "next field" state ─── */
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!containerRef.current) return;
-    const obs = new ResizeObserver(() => { if (containerRef.current) setScale((containerRef.current.clientWidth - 32) / pdfW); });
+    const calcScale = () => {
+      if (!containerRef.current) return;
+      // Cap scale at 1.0 so PDF never exceeds natural size
+      setScale(Math.min((containerRef.current.clientWidth - 32) / pdfW, 1.0));
+    };
+    const obs = new ResizeObserver(calcScale);
     obs.observe(containerRef.current);
-    setScale((containerRef.current.clientWidth - 32) / pdfW);
+    calcScale();
     return () => obs.disconnect();
   }, [pdfW]);
+
+  /* ─── Field completion helper ─── */
+  function isFieldComplete(f: any): boolean {
+    const val = values[f.id];
+    if (!val) return false;
+    if (f.type === "SIGNATURE" || f.type === "INITIALS") return !!val.sigDataUrl;
+    if (f.type === "CHECKBOX") return val.value === "true";
+    return !!val.value && val.value.trim().length > 0;
+  }
+
+  /* ─── "Next field" navigation ─── */
+  function goToNextField() {
+    const unfilled = session.fields.filter((f: any) => f.required && !isFieldComplete(f));
+    if (unfilled.length === 0) return;
+    const next = unfilled[0];
+    // Switch to the page containing this field
+    if (next.page !== page) setPage(next.page);
+    // Highlight the field briefly
+    setHighlightId(next.id);
+    setTimeout(() => setHighlightId(null), 2000);
+    // If it's a signature field, open the modal
+    if (next.type === "SIGNATURE" || next.type === "INITIALS") {
+      setTimeout(() => setActiveField(next), 300);
+    }
+    // Scroll to field position after page switch settles
+    setTimeout(() => {
+      const el = document.getElementById(`field-${next.id}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 200);
+  }
 
   // --- Analytics tracking ---
   useEffect(() => {
@@ -282,9 +320,13 @@ export default function SignPage() {
   if (!session) return null;
 
   const pageFields = session.fields.filter((f: any) => f.page === page);
-  const required = session.fields.filter((f: any) => f.required).length;
-  const completed = Object.keys(values).length;
+  const requiredFields = session.fields.filter((f: any) => f.required);
+  const required = requiredFields.length;
+  const completed = requiredFields.filter((f: any) => isFieldComplete(f)).length;
   const progress = required > 0 ? (completed / required) * 100 : 100;
+  const allComplete = completed === required;
+  const unfilled = requiredFields.filter((f: any) => !isFieldComplete(f));
+  const remaining = unfilled.length;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-neutral-950 flex flex-col">
@@ -345,15 +387,24 @@ export default function SignPage() {
             <img src={pdfImgs[page - 1]} alt="" className="absolute inset-0 w-full h-full shadow-2xl" draggable={false} style={{ pointerEvents: "none" }} />
             {pageFields.map((f: any) => {
               const val = values[f.id];
-              const isFilled = !!val;
+              const isSigFilled = val?.sigDataUrl;
+              const isHL = highlightId === f.id;
               return (
-                <div key={f.id} className="absolute" style={{ left: f.x * scale, top: f.y * scale, width: f.width * scale, height: f.height * scale }} onClick={() => (f.type === "SIGNATURE" || f.type === "INITIALS") && setActiveField(f)}>
+                <div key={f.id} id={`field-${f.id}`} className={`absolute transition-all ${isHL ? "z-20" : ""}`}
+                  style={{
+                    left: f.x * scale, top: f.y * scale,
+                    width: f.width * scale, height: f.height * scale,
+                    ...(isHL ? { boxShadow: "0 0 0 3px #22c55e, 0 0 20px rgba(34,197,94,0.3)", borderRadius: 6 } : {}),
+                  }}
+                  onClick={() => (f.type === "SIGNATURE" || f.type === "INITIALS") && setActiveField(f)}>
+                  {/* Pulse animation on highlight */}
+                  {isHL && <div className="absolute -inset-1 border-2 border-mint-400 rounded-lg animate-pulse pointer-events-none" />}
                   {(f.type === "SIGNATURE" || f.type === "INITIALS") ? (
-                    isFilled ? (
+                    isSigFilled ? (
                       <img src={val.sigDataUrl} alt="sig" className="w-full h-full object-contain" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center rounded cursor-pointer" style={{ background: "rgba(34,197,94,0.08)", border: "2px dashed #22c55e" }}>
-                        <div className="text-center"><Pen size={Math.min(16, f.height * scale * 0.4)} className="text-mint-500 mx-auto" />{f.height * scale > 40 && <div className="text-xs text-mint-500 mt-0.5">{f.type === "INITIALS" ? "Initials" : "Sign"}</div>}</div>
+                        <div className="text-center"><Pen size={Math.min(16, f.height * scale * 0.4)} className="text-mint-500 mx-auto" />{f.height * scale > 40 && <div className="text-xs text-mint-500 mt-0.5">{f.type === "INITIALS" ? "Initials" : "Sign here"}</div>}</div>
                       </div>
                     )
                   ) : f.type === "CHECKBOX" ? (
@@ -374,13 +425,28 @@ export default function SignPage() {
         )}
       </div>
 
+      {/* ─── Next Field floating button ─── */}
+      {remaining > 0 && (
+        <div className="fixed bottom-20 right-4 z-30">
+          <button onClick={goToNextField}
+            className="flex items-center gap-2 px-4 py-2.5 bg-mint-500 hover:bg-mint-600 text-white rounded-full shadow-xl shadow-mint-500/30 text-sm font-semibold transition-all animate-bounce hover:animate-none">
+            <Navigation size={14} />
+            {remaining === unfilled.length ? "Start" : "Next"} Field
+            <span className="text-mint-200 text-xs">({remaining} left)</span>
+          </button>
+        </div>
+      )}
+
       {/* Bottom bar */}
       <div className="flex-shrink-0 border-t border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 py-3 flex items-center gap-3">
         <button onClick={decline} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-red-500 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-400 dark:hover:text-red-400 rounded-lg text-sm font-medium transition-all">Decline</button>
         <div className="flex-1" />
-        <button onClick={submit} disabled={submitting || completed < required} className="flex items-center gap-2 px-6 py-2.5 bg-mint-500 hover:bg-mint-600 disabled:opacity-40 text-white rounded-lg text-sm font-semibold transition-all">
+        <button onClick={submit} disabled={submitting || !allComplete} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${allComplete
+            ? "bg-mint-500 hover:bg-mint-600 text-white shadow-sm shadow-mint-200 dark:shadow-mint-900/30"
+            : "bg-slate-200 dark:bg-neutral-800 text-slate-400 dark:text-neutral-600 cursor-not-allowed"
+          }`}>
           {submitting ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <CheckCircle2 size={16} />}
-          {submitting ? "Submitting..." : "Complete Signing"}
+          {submitting ? "Submitting..." : allComplete ? "Complete Signing" : `${remaining} field${remaining !== 1 ? "s" : ""} remaining`}
         </button>
       </div>
 

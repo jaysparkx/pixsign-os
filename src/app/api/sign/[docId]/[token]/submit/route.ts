@@ -19,11 +19,16 @@ export async function POST(req: NextRequest, { params }: { params: { docId: stri
   const ip = getIp(req);
 
   // Save each field value
+  console.log(`[SUBMIT] Recipient: ${recipient.id}, fields received:`, (fields as any[]).length);
   for (const f of fields as Array<{ id: string; value?: string; sigDataUrl?: string }>) {
     const field = await prisma.field.findUnique({ where: { id: f.id } });
-    if (!field || field.recipientId !== recipient.id) continue;
+    if (!field || (field.recipientId !== null && field.recipientId !== recipient.id)) {
+      console.log(`[SUBMIT] SKIPPED field ${f.id}: not found or wrong recipient (fieldRecipientId=${field?.recipientId}, recipientId=${recipient.id})`);
+      continue;
+    }
 
     const value = (field.type === "SIGNATURE" || field.type === "INITIALS") ? f.sigDataUrl : f.value;
+    console.log(`[SUBMIT] Saving field ${f.id} type=${field.type} hasValue=${!!value} valueLen=${value?.length}`);
     if (field.required && !value) {
       return NextResponse.json({ error: `Required field missing: ${field.type}` }, { status: 400 });
     }
