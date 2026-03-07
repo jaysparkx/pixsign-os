@@ -22,7 +22,8 @@
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Prisma-PostgreSQL-2D3748?style=flat-square&logo=prisma" alt="Prisma">
   <img src="https://img.shields.io/badge/Cloudflare-R2-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="R2">
-  <img src="https://img.shields.io/badge/License-Proprietary-red?style=flat-square" alt="License">
+  <img src="https://img.shields.io/badge/MCP-10%20Tools-10b981?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIGQ9Ik0xMiAydjIwTTIgMTJoMjAiLz48L3N2Zz4=" alt="MCP">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License">
 </p>
 
 ---
@@ -83,6 +84,29 @@ Built as a self-hostable alternative to DocuSign, PandaDoc, and HelloSign — wi
 | **Framer Motion** | Smooth page transitions and micro-animations |
 | **Keyboard Shortcuts** | Quick navigation throughout the app |
 
+### 🤖 MCP Integration (Model Context Protocol)
+
+PixSign includes a built-in MCP server — connect **Claude, Cursor, Windsurf**, or any MCP-compatible AI to manage documents with natural language.
+
+| Tool | Description |
+|---|---|
+| `list_documents` | List documents with status filter |
+| `get_document` | Full document details with recipients |
+| `send_for_signing` | Send draft to signers with email notifications |
+| `get_signing_status` | Check per-recipient signing progress |
+| `get_analytics` | Dashboard stats and activity timeline |
+| `add_recipient` | Add signer/CC to a draft document |
+| `void_document` | Cancel and stop signing |
+| `download_document` | Get presigned download URL |
+| `upload_document` | Upload PDF via base64 |
+| `delete_document` | Permanently delete a document |
+
+**Also includes:**
+- 🔑 API key management (create, revoke, max 5 per user)
+- 📊 Activity log with per-call metrics
+- ⚡ Rate limiting (60 req/min per key)
+- 📁 MCP Resources (`documents://list`, `analytics://dashboard`)
+
 ---
 
 ## Tech Stack
@@ -95,6 +119,7 @@ Auth              Better Auth (session-based)
 Storage           Cloudflare R2 (S3-compatible) · local filesystem fallback
 PDF Engine        pdf-lib (embed signatures) · PDF.js (render in browser)
 Email             Resend (transactional emails)
+MCP Server        JSON-RPC 2.0 · Bearer token auth · 10 tools
 Hosting           Netlify (frontend + serverless functions)
 ```
 
@@ -112,8 +137,8 @@ Hosting           Netlify (frontend + serverless functions)
 
 ```bash
 # Clone
-git clone https://github.com/jaysparkx/pixsign.git
-cd pixsign
+git clone https://github.com/jaysparkx/pixsign-os.git
+cd pixsign-os
 
 # Install dependencies
 npm install
@@ -160,6 +185,7 @@ Open [http://localhost:3000](http://localhost:3000)
 ├─────────────────────────────────────────────────┤
 │              Next.js API Routes                   │
 │  /api/documents/* · /api/sign/* · /api/auth/*     │
+│  /api/mcp (JSON-RPC) · /api/mcp/keys · /logs     │
 ├──────────┬──────────┬──────────┬────────────────┤
 │  Prisma  │    R2    │  pdf-lib │    Resend      │
 │ (Postgres)│ (Storage)│  (PDF)   │   (Email)      │
@@ -175,6 +201,7 @@ src/
 │   ├── login/page.tsx              # Authentication
 │   ├── analytics/page.tsx          # Global analytics
 │   ├── settings/page.tsx           # User settings (profile, appearance)
+│   ├── mcp/page.tsx                # Connect MCP — API keys, tools, activity log
 │   ├── share/[id]/page.tsx         # Public document viewer
 │   ├── documents/[id]/
 │   │   ├── page.tsx                # Document detail + send
@@ -185,6 +212,7 @@ src/
 │   └── api/
 │       ├── documents/              # CRUD, upload, send, void, download, share, copy
 │       ├── sign/[docId]/[token]/   # Load session, submit, decline
+│       ├── mcp/                    # JSON-RPC endpoint + /keys + /logs
 │       ├── auth/[...all]/          # Better Auth handler
 │       ├── analytics/              # Analytics aggregation
 │       └── track/                  # Event tracking
@@ -197,10 +225,13 @@ src/
 │   ├── auth-client.ts              # Client-side auth hooks
 │   ├── events.ts                   # Event logging
 │   ├── get-user.ts                 # Server-side user extraction
-│   └── theme.tsx                   # Theme provider
+│   ├── theme.tsx                   # Theme provider
+│   └── mcp/
+│       ├── auth.ts                 # API key generation, hashing, validation
+│       └── tools.ts                # 10 tool definitions + handlers + resources
 ├── middleware.ts                    # Auth guards + security headers
 └── prisma/
-    └── schema.prisma               # Database schema
+    └── schema.prisma               # Database schema (incl. ApiKey, McpLog)
 ```
 
 ---
@@ -231,14 +262,15 @@ src/
 
 ## Roadmap
 
-### 🤖 AI Tools `coming soon`
+### 🤖 AI Tools
 
 | Feature | Description | Status |
 |---|---|---|
-| **AI Document Generation** | Generate contracts, NDAs, agreements from natural language prompts | 🔜 Next |
-| **AI Contract Review** | Upload a contract → get risk analysis, clause summaries, red flags | 🔜 Next |
-| **Smart Analysis** | Extract key terms, dates, obligations, and parties from any document | 🔜 Next |
-| **AI Agent Integration** | Connect external AI agents (MCP, API) to automate document workflows | 🔜 Planned |
+| **MCP Server** | JSON-RPC 2.0 endpoint with 10 tools, API key auth, rate limiting | ✅ Live |
+| **AI Agent Integration** | Connect Claude, Cursor, Windsurf via MCP | ✅ Live |
+| **AI Document Generation** | Generate contracts, NDAs from natural language prompts | 🔜 Next |
+| **AI Contract Review** | Upload a contract → get risk analysis, red flags | 🔜 Next |
+| **Smart Analysis** | Extract key terms, dates, obligations from documents | 🔜 Next |
 
 ### 💳 Payments & Plans
 
@@ -332,11 +364,13 @@ Pixsign is currently in active development. If you're interested in contributing
 
 ## License
 
-Proprietary — All rights reserved.
+Proprietary — All rights reserved.  
+Open-source version available at [pixsign-os](https://github.com/jaysparkx/pixsign-os).
 
 ---
 
 <p align="center">
   <strong>Built by <a href="https://github.com/jaysparkx">JAY.S</a></strong><br>
-  <sub>Pixsign — making document signing fast, beautiful, and intelligent.</sub>
+  <sub>Pixsign — making document signing fast, beautiful, and intelligent.</sub><br>
+  <sub>⭐ Star the repo if you find it useful!</sub>
 </p>
