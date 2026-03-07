@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   "/api/auth/",
   "/api/track",
   "/api/webhooks/",
+  "/api/mcp",        // MCP uses its own API key auth
   "/api/documents/", // share sub-route handled below
 ];
 

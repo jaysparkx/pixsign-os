@@ -338,8 +338,8 @@ export default function MCPPage() {
                                                 key={tab.key}
                                                 onClick={() => setConfigTab(tab.key)}
                                                 className={`flex-1 py-3 text-xs font-medium transition-colors ${configTab === tab.key
-                                                        ? "text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/10 border-b-2 border-violet-500"
-                                                        : "text-slate-400 dark:text-neutral-500 hover:text-slate-600 dark:hover:text-neutral-300"
+                                                    ? "text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/10 border-b-2 border-violet-500"
+                                                    : "text-slate-400 dark:text-neutral-500 hover:text-slate-600 dark:hover:text-neutral-300"
                                                     }`}
                                             >
                                                 {tab.label}
