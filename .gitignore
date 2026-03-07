@@ -28,6 +28,7 @@ public/uploads/signatures/*
 !public/uploads/originals/.gitkeep
 !public/uploads/signed/.gitkeep
 !public/uploads/signatures/.gitkeep
+everything-claude-code
 
 # Debug
 npm-debug.log*

@@ -28,6 +28,7 @@ model User {
   documents Document[]
   sessions  Session[]
   accounts  Account[]
+  apiKeys   ApiKey[]
 
   @@map("user")
 }
@@ -177,4 +178,40 @@ model ViewEvent {
 
   @@index([documentId, page])
   @@index([documentId, visitorId])
+}
+
+// ── MCP Models ──────────────────────────────────────────
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String    @default("Default")
+  keyHash    String    @unique
+  keyPrefix  String
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  mcpLogs    McpLog[]
+
+  @@index([userId])
+  @@map("api_key")
+}
+
+model McpLog {
+  id         String   @id @default(uuid())
+  apiKeyId   String
+  apiKey     ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  tool       String
+  params     String?
+  status     String
+  durationMs Int
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([apiKeyId])
+  @@index([createdAt])
+  @@map("mcp_log")
 }
