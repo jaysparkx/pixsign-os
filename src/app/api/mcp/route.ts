@@ -1,9 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiKey } from "@/lib/mcp/auth";
-import { TOOLS, handleToolCall } from "@/lib/mcp/tools";
+import { TOOLS, handleToolCall, RESOURCES, handleResourceRead } from "@/lib/mcp/tools";
 import prisma from "@/lib/prisma";
 
 export const runtime = "nodejs";
+
+// ── Rate Limiter (in-memory, resets on deploy) ──
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 60; // requests per window
+const RATE_WINDOW_MS = 60_000; // 1 minute
+
+function checkRateLimit(apiKeyId: string): boolean {
+    const now = Date.now();
+    const entry = rateLimitMap.get(apiKeyId);
+    if (!entry || now > entry.resetAt) {
+        rateLimitMap.set(apiKeyId, { count: 1, resetAt: now + RATE_WINDOW_MS });
+        return true;
+    }
+    entry.count++;
+    return entry.count <= RATE_LIMIT;
+}
 
 /**
  * MCP JSON-RPC 2.0 Endpoint
@@ -22,6 +38,11 @@ export async function POST(req: NextRequest) {
     const auth = await validateApiKey(apiKey);
     if (!auth) {
         return jsonRpcError(null, -32001, "Invalid or expired API key");
+    }
+
+    // ── Rate Limit ──
+    if (!checkRateLimit(auth.apiKeyId)) {
+        return jsonRpcError(null, -32003, `Rate limit exceeded: max ${RATE_LIMIT} requests per minute`);
     }
 
     // ── Parse JSON-RPC ──
@@ -46,8 +67,8 @@ export async function POST(req: NextRequest) {
                 capabilities: { tools: {}, resources: {} },
                 serverInfo: {
                     name: "pixsign-mcp",
-                    version: "1.0.0",
-                    description: "PixSign e-signing platform — manage documents, signers, and analytics via AI",
+                    version: "2.0.0",
+                    description: "PixSign e-signing platform — 9 tools for documents, signers, and analytics",
                 },
             });
 
@@ -102,10 +123,18 @@ export async function POST(req: NextRequest) {
         }
 
         case "resources/list":
-            return jsonRpcSuccess(id, { resources: [] });
+            return jsonRpcSuccess(id, { resources: RESOURCES });
 
-        case "resources/read":
-            return jsonRpcError(id, -32601, "No resources available yet");
+        case "resources/read": {
+            const { uri } = params || {};
+            if (!uri) {
+                return jsonRpcError(id, -32602, "Missing resource URI in params.uri");
+            }
+            const resource = await handleResourceRead(uri, auth.userId);
+            return jsonRpcSuccess(id, {
+                contents: [{ uri, mimeType: "application/json", text: resource.content[0]?.text }],
+            });
+        }
 
         default:
             return jsonRpcError(id, -32601, `Method not found: ${method}`);
@@ -116,9 +145,11 @@ export async function POST(req: NextRequest) {
 export async function GET() {
     return NextResponse.json({
         name: "pixsign-mcp",
-        version: "1.0.0",
+        version: "2.0.0",
         protocol: "MCP (Model Context Protocol)",
         description: "PixSign e-signing platform MCP server",
+        tools: TOOLS.length,
+        resources: RESOURCES.length,
         docs: "https://modelcontextprotocol.io",
     });
 }

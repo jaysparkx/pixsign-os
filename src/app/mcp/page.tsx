@@ -6,7 +6,8 @@ import {
     ArrowLeft, Key, Plus, Copy, Trash2, Check, Eye, EyeOff,
     Zap, FileText, Send, BarChart3, Search, Shield, Clock,
     Terminal, ExternalLink, ChevronDown, ChevronUp, AlertTriangle,
-    RefreshCw, Cpu, Globe
+    RefreshCw, Cpu, Globe, UserPlus, Ban, Download, Upload,
+    Activity
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -30,6 +31,10 @@ const MCP_TOOLS = [
     { name: "send_for_signing", description: "Send a draft document to all recipients for signing", icon: Send, color: "#22c55e" },
     { name: "get_signing_status", description: "Check who has signed, viewed, or is still pending", icon: Eye, color: "#f59e0b" },
     { name: "get_analytics", description: "Get analytics overview: totals, completion rate, activity", icon: BarChart3, color: "#06b6d4" },
+    { name: "add_recipient", description: "Add a signer or CC recipient to a draft document", icon: UserPlus, color: "#10b981" },
+    { name: "void_document", description: "Void (cancel) a document and stop all signing", icon: Ban, color: "#ef4444" },
+    { name: "download_document", description: "Get a download URL for the original or signed PDF", icon: Download, color: "#6366f1" },
+    { name: "upload_document", description: "Upload a new PDF document via base64 encoding", icon: Upload, color: "#f97316" },
 ];
 
 /* ─── Config snippets ─── */
@@ -74,8 +79,10 @@ export default function MCPPage() {
     const [copied, setCopied] = useState("");
     const [configTab, setConfigTab] = useState<"claude" | "cursor" | "curl">("claude");
     const [expandedSection, setExpandedSection] = useState<string | null>("setup");
+    const [logs, setLogs] = useState<any[]>([]);
+    const [logsLoading, setLogsLoading] = useState(false);
 
-    useEffect(() => { fetchKeys(); }, []);
+    useEffect(() => { fetchKeys(); fetchLogs(); }, []);
 
     async function fetchKeys() {
         setLoading(true);
@@ -85,6 +92,15 @@ export default function MCPPage() {
             setKeys(await res.json());
         } catch { toast.error("Failed to load API keys"); }
         finally { setLoading(false); }
+    }
+
+    async function fetchLogs() {
+        setLogsLoading(true);
+        try {
+            const res = await fetch("/api/mcp/logs");
+            if (res.ok) setLogs(await res.json());
+        } catch { /* silent */ }
+        finally { setLogsLoading(false); }
     }
 
     async function createKey() {
@@ -182,7 +198,7 @@ export default function MCPPage() {
                                 <Globe size={14} /> Works with any MCP client
                             </div>
                             <div className="flex items-center gap-2 text-xs text-violet-200">
-                                <Zap size={14} /> 5 tools available
+                                <Zap size={14} /> 9 tools available
                             </div>
                         </div>
                     </div>
@@ -435,7 +451,6 @@ export default function MCPPage() {
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.4 }}
-                    className="pb-8"
                 >
                     <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
                         <Terminal size={16} className="text-violet-500" /> Example AI Prompts
@@ -445,13 +460,71 @@ export default function MCPPage() {
                             { prompt: "Show me all my pending documents", desc: "Lists documents with SENT/PARTIALLY_SIGNED status" },
                             { prompt: "What's the signing status of the NDA?", desc: "Shows which signers have signed or are pending" },
                             { prompt: "Send the contract to all recipients", desc: "Sends the document and emails signing links" },
-                            { prompt: "Give me my signing analytics for this month", desc: "Returns completion rates, totals, and trends" },
+                            { prompt: "Add john@acme.com as a signer on the lease agreement", desc: "Adds a new recipient to a draft document" },
+                            { prompt: "Void the expired proposal", desc: "Cancels a document and stops all signing" },
+                            { prompt: "Give me a download link for the signed contract", desc: "Returns a presigned URL to download the PDF" },
                         ].map((ex) => (
                             <div key={ex.prompt} className="bg-white dark:bg-neutral-900 rounded-xl border border-slate-200 dark:border-neutral-800 p-4">
                                 <p className="text-sm font-medium text-violet-600 dark:text-violet-400 mb-1">&ldquo;{ex.prompt}&rdquo;</p>
                                 <p className="text-xs text-slate-400 dark:text-neutral-500">{ex.desc}</p>
                             </div>
                         ))}
+                    </div>
+                </motion.section>
+
+                {/* ─── Activity Log ─── */}
+                <motion.section
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="pb-8"
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                            <Activity size={16} className="text-violet-500" /> Activity Log
+                        </h3>
+                        <button
+                            onClick={fetchLogs}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-neutral-800 text-xs text-slate-500 dark:text-neutral-400 hover:bg-violet-100 dark:hover:bg-violet-900/20 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
+                        >
+                            <RefreshCw size={12} className={logsLoading ? "animate-spin" : ""} /> Refresh
+                        </button>
+                    </div>
+
+                    <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-slate-200 dark:border-neutral-800 overflow-hidden">
+                        {logsLoading ? (
+                            <div className="flex justify-center py-12">
+                                <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                            </div>
+                        ) : logs.length === 0 ? (
+                            <div className="text-center py-12 text-slate-400 dark:text-neutral-500 text-sm">
+                                No MCP calls yet. Connect an AI tool to see activity here.
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-slate-100 dark:divide-neutral-800">
+                                {logs.map((log: any) => (
+                                    <div key={log.id} className="px-5 py-3 flex items-center justify-between text-xs">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${log.status === "success" ? "bg-green-500" : "bg-red-500"
+                                                }`} />
+                                            <div>
+                                                <span className="font-mono font-medium text-slate-700 dark:text-neutral-200">
+                                                    {log.tool}
+                                                </span>
+                                                {log.error && (
+                                                    <span className="ml-2 text-red-400 dark:text-red-500">{log.error}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4 text-slate-400 dark:text-neutral-500">
+                                            <span className="hidden sm:inline">{log.apiKey?.name || log.apiKey?.keyPrefix}</span>
+                                            <span>{log.durationMs}ms</span>
+                                            <span>{new Date(log.createdAt).toLocaleString()}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </motion.section>
             </div>

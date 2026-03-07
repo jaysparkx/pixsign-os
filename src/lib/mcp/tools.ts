@@ -98,6 +98,91 @@ export const TOOLS: McpTool[] = [
             properties: {},
         },
     },
+    {
+        name: "add_recipient",
+        description:
+            "Add a signer or CC recipient to a DRAFT document. They will receive a signing link when the document is sent.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                documentId: {
+                    type: "string",
+                    description: "The document ID",
+                },
+                name: {
+                    type: "string",
+                    description: "Recipient's full name",
+                },
+                email: {
+                    type: "string",
+                    description: "Recipient's email address",
+                },
+                role: {
+                    type: "string",
+                    description: "Role: SIGNER (needs to sign) or CC (receives a copy)",
+                    enum: ["SIGNER", "CC"],
+                },
+            },
+            required: ["documentId", "name", "email"],
+        },
+    },
+    {
+        name: "void_document",
+        description:
+            "Void (cancel) a document. This prevents any further signing and notifies all recipients.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                documentId: {
+                    type: "string",
+                    description: "The document ID to void",
+                },
+                reason: {
+                    type: "string",
+                    description: "Reason for voiding (optional)",
+                },
+            },
+            required: ["documentId"],
+        },
+    },
+    {
+        name: "download_document",
+        description:
+            "Get a download URL for a document's PDF. Returns the signed version if completed, otherwise the original.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                documentId: {
+                    type: "string",
+                    description: "The document ID",
+                },
+            },
+            required: ["documentId"],
+        },
+    },
+    {
+        name: "upload_document",
+        description:
+            "Upload a new PDF document. Accepts a base64-encoded PDF file. Creates a DRAFT document ready for recipients and fields.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                title: {
+                    type: "string",
+                    description: "Document title",
+                },
+                fileBase64: {
+                    type: "string",
+                    description: "Base64-encoded PDF file content",
+                },
+                message: {
+                    type: "string",
+                    description: "Optional message for recipients",
+                },
+            },
+            required: ["title", "fileBase64"],
+        },
+    },
 ];
 
 // ── Tool Handlers ────────────────────────────────────────
@@ -118,6 +203,14 @@ export async function handleToolCall(
             return handleGetSigningStatus(userId, args);
         case "get_analytics":
             return handleGetAnalytics(userId);
+        case "add_recipient":
+            return handleAddRecipient(userId, args);
+        case "void_document":
+            return handleVoidDocument(userId, args);
+        case "download_document":
+            return handleDownloadDocument(userId, args);
+        case "upload_document":
+            return handleUploadDocument(userId, args);
         default:
             return { content: [{ type: "text", text: `Unknown tool: ${toolName}` }], isError: true };
     }
@@ -389,4 +482,265 @@ async function handleGetAnalytics(userId: string): Promise<ToolResult> {
     return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
     };
+}
+
+// ── Phase 2 Handlers ─────────────────────────────────────
+
+async function handleAddRecipient(
+    userId: string,
+    args: Record<string, any>
+): Promise<ToolResult> {
+    const doc = await prisma.document.findUnique({
+        where: { id: args.documentId, userId },
+        select: { id: true, status: true },
+    });
+    if (!doc) {
+        return { content: [{ type: "text", text: "Document not found" }], isError: true };
+    }
+    if (doc.status !== "DRAFT") {
+        return { content: [{ type: "text", text: `Cannot add recipient: document status is ${doc.status} (must be DRAFT)` }], isError: true };
+    }
+
+    const email = args.email.toLowerCase().trim();
+    const name = args.name.trim();
+    if (!email || !name) {
+        return { content: [{ type: "text", text: "Name and email are required" }], isError: true };
+    }
+
+    // Check for duplicates
+    const exists = await prisma.recipient.findFirst({
+        where: { documentId: args.documentId, email },
+    });
+    if (exists) {
+        return { content: [{ type: "text", text: `${email} is already a recipient on this document` }], isError: true };
+    }
+
+    const count = await prisma.recipient.count({ where: { documentId: args.documentId } });
+    const recipient = await prisma.recipient.create({
+        data: {
+            documentId: args.documentId,
+            name,
+            email,
+            role: args.role || "SIGNER",
+            signingOrder: count + 1,
+        },
+    });
+
+    return {
+        content: [
+            {
+                type: "text",
+                text: JSON.stringify(
+                    {
+                        success: true,
+                        recipient: {
+                            id: recipient.id,
+                            name: recipient.name,
+                            email: recipient.email,
+                            role: recipient.role,
+                            signingOrder: recipient.signingOrder,
+                        },
+                    },
+                    null,
+                    2
+                ),
+            },
+        ],
+    };
+}
+
+async function handleVoidDocument(
+    userId: string,
+    args: Record<string, any>
+): Promise<ToolResult> {
+    const doc = await prisma.document.findUnique({
+        where: { id: args.documentId, userId },
+        select: { id: true, status: true, title: true },
+    });
+    if (!doc) {
+        return { content: [{ type: "text", text: "Document not found" }], isError: true };
+    }
+    if (doc.status === "VOIDED") {
+        return { content: [{ type: "text", text: "Document is already voided" }], isError: true };
+    }
+    if (doc.status === "COMPLETED") {
+        return { content: [{ type: "text", text: "Cannot void a completed document" }], isError: true };
+    }
+
+    const reason = args.reason || "Voided via MCP";
+    await prisma.document.update({
+        where: { id: args.documentId },
+        data: { status: "VOIDED", voidedAt: new Date(), voidReason: reason },
+    });
+
+    const { log } = await import("../events");
+    await log(args.documentId, "DOCUMENT_VOIDED", undefined, undefined, { reason });
+
+    return {
+        content: [
+            {
+                type: "text",
+                text: JSON.stringify(
+                    { success: true, documentId: doc.id, title: doc.title, status: "VOIDED", reason },
+                    null,
+                    2
+                ),
+            },
+        ],
+    };
+}
+
+async function handleDownloadDocument(
+    userId: string,
+    args: Record<string, any>
+): Promise<ToolResult> {
+    const doc = await prisma.document.findUnique({
+        where: { id: args.documentId, userId },
+        select: { id: true, title: true, status: true, originalPath: true, signedPath: true },
+    });
+    if (!doc) {
+        return { content: [{ type: "text", text: "Document not found" }], isError: true };
+    }
+
+    const { getDownloadUrl } = await import("../storage");
+    const filePath = doc.signedPath || doc.originalPath;
+    const url = await getDownloadUrl(filePath, 3600);
+    const version = doc.signedPath ? "signed" : "original";
+
+    return {
+        content: [
+            {
+                type: "text",
+                text: JSON.stringify(
+                    {
+                        documentId: doc.id,
+                        title: doc.title,
+                        status: doc.status,
+                        version,
+                        downloadUrl: url,
+                        expiresIn: "1 hour",
+                    },
+                    null,
+                    2
+                ),
+            },
+        ],
+    };
+}
+
+async function handleUploadDocument(
+    userId: string,
+    args: Record<string, any>
+): Promise<ToolResult> {
+    const { title, fileBase64, message } = args;
+
+    // Decode base64
+    let buffer: Buffer;
+    try {
+        const cleaned = fileBase64.replace(/^data:application\/pdf;base64,/, "");
+        buffer = Buffer.from(cleaned, "base64");
+    } catch {
+        return { content: [{ type: "text", text: "Invalid base64 data" }], isError: true };
+    }
+
+    if (buffer.length > 50 * 1024 * 1024) {
+        return { content: [{ type: "text", text: "File too large. Maximum size is 50MB." }], isError: true };
+    }
+
+    // Validate PDF
+    const { validatePdf } = await import("../pdf");
+    let pages = 1;
+    try {
+        const info = await validatePdf(buffer);
+        pages = info.pages;
+    } catch {
+        return { content: [{ type: "text", text: "Invalid PDF file" }], isError: true };
+    }
+
+    // Upload to storage
+    const { uploadFile, hashBuffer } = await import("../storage");
+    const originalPath = await uploadFile(buffer, `${title}.pdf`, "originals");
+    const originalHash = hashBuffer(buffer);
+
+    // Create document
+    const doc = await prisma.document.create({
+        data: {
+            title,
+            originalPath,
+            originalHash,
+            userId,
+            message: message || null,
+        },
+    });
+
+    const { log } = await import("../events");
+    await log(doc.id, "DOCUMENT_CREATED", undefined, undefined, { pages, via: "mcp" });
+
+    return {
+        content: [
+            {
+                type: "text",
+                text: JSON.stringify(
+                    {
+                        success: true,
+                        document: {
+                            id: doc.id,
+                            title: doc.title,
+                            status: "DRAFT",
+                            pages,
+                        },
+                        nextSteps: [
+                            "Add recipients with add_recipient tool",
+                            "Add signing fields via the web UI at /documents/" + doc.id + "/prepare",
+                            "Send for signing with send_for_signing tool",
+                        ],
+                    },
+                    null,
+                    2
+                ),
+            },
+        ],
+    };
+}
+
+// ── MCP Resources ────────────────────────────────────────
+
+export interface McpResource {
+    uri: string;
+    name: string;
+    description: string;
+    mimeType: string;
+}
+
+export const RESOURCES: McpResource[] = [
+    {
+        uri: "documents://list",
+        name: "Document List",
+        description: "Current list of all documents with status",
+        mimeType: "application/json",
+    },
+    {
+        uri: "analytics://dashboard",
+        name: "Analytics Dashboard",
+        description: "Signing analytics and statistics",
+        mimeType: "application/json",
+    },
+];
+
+export async function handleResourceRead(
+    uri: string,
+    userId: string
+): Promise<ToolResult> {
+    switch (uri) {
+        case "documents://list": {
+            const result = await handleListDocuments(userId, { limit: 50 });
+            return result;
+        }
+        case "analytics://dashboard": {
+            const result = await handleGetAnalytics(userId);
+            return result;
+        }
+        default:
+            return { content: [{ type: "text", text: `Unknown resource: ${uri}` }], isError: true };
+    }
 }
