@@ -464,6 +464,7 @@ export default function MCPPage() {
                             { prompt: "Add john@acme.com as a signer on the lease agreement", desc: "Adds a new recipient to a draft document" },
                             { prompt: "Void the expired proposal", desc: "Cancels a document and stops all signing" },
                             { prompt: "Give me a download link for the signed contract", desc: "Returns a presigned URL to download the PDF" },
+                            { prompt: "Delete all my draft documents", desc: "Permanently removes draft docs and their files from storage" },
                         ].map((ex) => (
                             <div key={ex.prompt} className="bg-white dark:bg-neutral-900 rounded-xl border border-slate-200 dark:border-neutral-800 p-4">
                                 <p className="text-sm font-medium text-violet-600 dark:text-violet-400 mb-1">&ldquo;{ex.prompt}&rdquo;</p>
