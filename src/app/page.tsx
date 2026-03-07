@@ -152,14 +152,17 @@ function Sidebar({ activeNav, onNav, onMobileClose, stats, collapsed, onToggle }
         {/* ── AI Tools (coming soon) ── */}
         {expanded && <p className="mt-4 pt-3 border-t border-slate-200 dark:border-neutral-700 px-3 text-[11px] font-semibold uppercase tracking-wider text-violet-500">AI Tools</p>}
         {!expanded && <div className="mt-3 border-t border-slate-200 dark:border-neutral-700" />}
-        {NAV_AI.map(item => (
-          <button key={item.key} onClick={() => toast("Coming soon!", { icon: "🚧" })} title={!expanded ? item.label : undefined}
-            className={`w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all ${expanded ? "px-3 py-2.5" : "px-0 py-2.5 justify-center"} text-slate-400 dark:text-neutral-600`}>
-            <item.icon size={18} className="flex-shrink-0 text-violet-400 dark:text-violet-600" />
-            {expanded && <span className="whitespace-nowrap overflow-hidden">{item.label}</span>}
-            {expanded && <Lock size={10} className="ml-auto text-slate-300 dark:text-neutral-600 flex-shrink-0" />}
-          </button>
-        ))}
+        {NAV_AI.map(item => {
+          const isMcp = item.key === "ai-mcp";
+          return (
+            <button key={item.key} onClick={() => { if (isMcp) { onNav(item.key); onMobileClose?.(); } else { toast("Coming soon!", { icon: "🚧" }); } }} title={!expanded ? item.label : undefined}
+              className={`w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all ${expanded ? "px-3 py-2.5" : "px-0 py-2.5 justify-center"} ${isMcp ? "text-slate-500 dark:text-neutral-400 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:text-slate-700 dark:hover:text-neutral-200" : "text-slate-400 dark:text-neutral-600"}`}>
+              <item.icon size={18} className={`flex-shrink-0 ${isMcp ? "text-mint-500" : "text-violet-400 dark:text-violet-600"}`} />
+              {expanded && <span className="whitespace-nowrap overflow-hidden">{item.label}</span>}
+              {expanded && !isMcp && <Lock size={10} className="ml-auto text-slate-300 dark:text-neutral-600 flex-shrink-0" />}
+            </button>
+          );
+        })}
       </nav>
 
       {/* Bottom section */}
@@ -683,8 +686,8 @@ export default function Home() {
                         return (
                           <div key={ev.id} className="flex items-center gap-4 px-5 py-3 hover:bg-slate-50/50 dark:hover:bg-neutral-800/50 transition-colors">
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${ev.type.includes("SIGNED") || ev.type.includes("COMPLETED") ? "bg-mint-50 dark:bg-mint-950/40" :
-                                ev.type.includes("SENT") || ev.type.includes("EMAIL") ? "bg-blue-50 dark:bg-blue-950/40" :
-                                  ev.type.includes("DECLINED") || ev.type.includes("VOIDED") ? "bg-red-50 dark:bg-red-950/40" : "bg-slate-50 dark:bg-neutral-800"
+                              ev.type.includes("SENT") || ev.type.includes("EMAIL") ? "bg-blue-50 dark:bg-blue-950/40" :
+                                ev.type.includes("DECLINED") || ev.type.includes("VOIDED") ? "bg-red-50 dark:bg-red-950/40" : "bg-slate-50 dark:bg-neutral-800"
                               }`}>
                               <Activity size={14} className={cfg.color} />
                             </div>
@@ -777,8 +780,8 @@ export default function Home() {
                       onClick={item.active ? item.action : () => toast("Coming soon!", { icon: "🚧" })}
                       disabled={uploading && item.active}
                       className={`flex flex-col items-center justify-center gap-2 py-5 px-3 rounded-2xl border text-sm font-medium transition-all relative ${item.active
-                          ? "bg-gradient-to-br from-mint-500 to-mint-600 text-white border-mint-500 shadow-lg shadow-mint-200 dark:shadow-mint-900/30 hover:shadow-xl hover:shadow-mint-200 dark:hover:shadow-mint-900/40 hover:scale-[1.02]"
-                          : "bg-white dark:bg-neutral-900 text-slate-400 dark:text-neutral-500 border-slate-200 dark:border-neutral-800 cursor-default opacity-70"
+                        ? "bg-gradient-to-br from-mint-500 to-mint-600 text-white border-mint-500 shadow-lg shadow-mint-200 dark:shadow-mint-900/30 hover:shadow-xl hover:shadow-mint-200 dark:hover:shadow-mint-900/40 hover:scale-[1.02]"
+                        : "bg-white dark:bg-neutral-900 text-slate-400 dark:text-neutral-500 border-slate-200 dark:border-neutral-800 cursor-default opacity-70"
                         }`}>
                       {!item.active && (
                         <div className="absolute top-2 right-2">
