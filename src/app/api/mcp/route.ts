@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
                 serverInfo: {
                     name: "pixsign-mcp",
                     version: "2.0.0",
-                    description: "PixSign e-signing platform — 9 tools for documents, signers, and analytics",
+                    description: "PixSign e-signing platform — 10 tools for documents, signers, and analytics",
                 },
             });
 

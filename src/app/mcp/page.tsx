@@ -35,6 +35,7 @@ const MCP_TOOLS = [
     { name: "void_document", description: "Void (cancel) a document and stop all signing", icon: Ban, color: "#ef4444" },
     { name: "download_document", description: "Get a download URL for the original or signed PDF", icon: Download, color: "#6366f1" },
     { name: "upload_document", description: "Upload a new PDF document via base64 encoding", icon: Upload, color: "#f97316" },
+    { name: "delete_document", description: "Permanently delete a draft, sent, or completed document", icon: Trash2, color: "#dc2626" },
 ];
 
 /* ─── Config snippets ─── */
@@ -198,7 +199,7 @@ export default function MCPPage() {
                                 <Globe size={14} /> Works with any MCP client
                             </div>
                             <div className="flex items-center gap-2 text-xs text-violet-200">
-                                <Zap size={14} /> 9 tools available
+                                <Zap size={14} /> 10 tools available
                             </div>
                         </div>
                     </div>

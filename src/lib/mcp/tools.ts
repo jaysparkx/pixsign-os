@@ -183,6 +183,25 @@ export const TOOLS: McpTool[] = [
             required: ["title", "fileBase64"],
         },
     },
+    {
+        name: "delete_document",
+        description:
+            "Permanently delete a document and its associated files. Works on DRAFT, SENT, and COMPLETED documents.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                documentId: {
+                    type: "string",
+                    description: "The document ID to delete",
+                },
+                confirm: {
+                    type: "boolean",
+                    description: "Must be true to confirm deletion",
+                },
+            },
+            required: ["documentId", "confirm"],
+        },
+    },
 ];
 
 // ── Tool Handlers ────────────────────────────────────────
@@ -211,6 +230,8 @@ export async function handleToolCall(
             return handleDownloadDocument(userId, args);
         case "upload_document":
             return handleUploadDocument(userId, args);
+        case "delete_document":
+            return handleDeleteDocument(userId, args);
         default:
             return { content: [{ type: "text", text: `Unknown tool: ${toolName}` }], isError: true };
     }
@@ -695,6 +716,54 @@ async function handleUploadDocument(
                             "Send for signing with send_for_signing tool",
                         ],
                     },
+                    null,
+                    2
+                ),
+            },
+        ],
+    };
+}
+
+async function handleDeleteDocument(
+    userId: string,
+    args: Record<string, any>
+): Promise<ToolResult> {
+    if (!args.confirm) {
+        return { content: [{ type: "text", text: "Deletion requires confirm: true" }], isError: true };
+    }
+
+    const doc = await prisma.document.findUnique({
+        where: { id: args.documentId, userId },
+        select: { id: true, title: true, status: true, originalPath: true, signedPath: true },
+    });
+    if (!doc) {
+        return { content: [{ type: "text", text: "Document not found" }], isError: true };
+    }
+
+    const allowed = ["DRAFT", "SENT", "COMPLETED"];
+    if (!allowed.includes(doc.status)) {
+        return {
+            content: [{ type: "text", text: `Cannot delete: document status is ${doc.status}. Only DRAFT, SENT, and COMPLETED documents can be deleted.` }],
+            isError: true,
+        };
+    }
+
+    // Delete files from storage
+    const { deleteFile } = await import("../storage");
+    try { await deleteFile(doc.originalPath); } catch { /* ok */ }
+    if (doc.signedPath) {
+        try { await deleteFile(doc.signedPath); } catch { /* ok */ }
+    }
+
+    // Delete document (cascades to fields, recipients, events)
+    await prisma.document.delete({ where: { id: doc.id } });
+
+    return {
+        content: [
+            {
+                type: "text",
+                text: JSON.stringify(
+                    { success: true, deleted: { id: doc.id, title: doc.title, status: doc.status } },
                     null,
                     2
                 ),
